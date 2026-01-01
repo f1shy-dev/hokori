@@ -1,0 +1,77 @@
+[[rules]]
+id = "dev_tool_caches"
+kind = "dev"
+action = "cleanable"
+patterns = [
+  "~/Library/Developer/Xcode/DerivedData/**",
+  "~/Library/Developer/Xcode/Archives/**",
+  "~/Library/Developer/CoreSimulator/Caches/**",
+  "~/Library/Developer/CoreSimulator/Temp/**",
+  "~/Library/Caches/Google/AndroidStudio*/caches/**",
+  "~/Library/Caches/Google/AndroidStudio*/tmp/**",
+  "~/Library/Caches/JetBrains/*/caches/**",
+  "~/Library/Caches/JetBrains/*/tmp/**",
+  "~/Library/Developer/Xcode/DocumentationCache/**",
+  "~/Library/Developer/Xcode/DocumentationIndex/**",
+  "~/Library/Developer/CoreSimulator/Devices/*/data/Library/Caches/**",
+  "~/Library/Developer/CoreSimulator/Devices/*/data/tmp/**",
+  "~/Library/Developer/CoreSimulator/Devices/*/data/Media/PhotoData/Caches/**",
+  "~/Library/org.swift.swiftpm/**",
+]
+
+[[rules]]
+id = "dev_tool_caches_caution"
+kind = "dev"
+action = "caution"
+patterns = [
+  "~/Library/Developer/Xcode/iOS DeviceSupport/**",
+]
+
+[[rules]]
+id = "package_manager_caches"
+kind = "cache"
+action = "cleanable"
+patterns = [
+  "~/.npm/**",
+  "~/.yarn/**",
+  "~/.bun/**",
+  "~/.cargo/registry/**",
+  "~/.gradle/caches/**",
+  "~/Library/pnpm/**",
+  "~/.swiftpm/**",
+]
+
+[[rules]]
+id = "build_outputs"
+kind = "build"
+action = "caution"
+patterns = [
+  "**/node_modules/**",
+  "**/target/**",
+  "**/.output/**",
+]
+
+[rules.context]
+require_ancestor_files_any = [
+  "Cargo.toml",
+  "package.json",
+  "pnpm-workspace.yaml",
+  "package-lock.json",
+  "pnpm-lock.yaml",
+  "yarn.lock",
+  "bun.lock",
+  "nuxt.config.js",
+  "nuxt.config.ts",
+  "next.config.js",
+  "next.config.mjs",
+  "next.config.ts",
+]
+ancestor_depth = 6
+exclude_ancestor_any = [
+  "Library",
+]
+sample_parent_any = [
+  "node_modules",
+  "target",
+  ".output",
+]

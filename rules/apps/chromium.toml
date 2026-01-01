@@ -1,0 +1,44 @@
+[[rules]]
+id = "browser_electron_cache"
+kind = "cache"
+action = "cleanable"
+patterns = [
+  "**/Cache/**",
+  "**/Code Cache/**",
+  "**/GPUCache/**",
+  "**/DawnWebGPUCache/**",
+  "**/DawnGraphiteCache/**",
+  "**/GraphiteDawnCache/**",
+  "**/ShaderCache/**",
+  "**/GrShaderCache/**",
+  "**/Service Worker/CacheStorage/**",
+  "**/Service Worker/ScriptCache/**",
+  "**/Shared Dictionary/cache/**",
+  "**/component_crx_cache/**",
+  "**/extensions_crx_cache/**",
+  "**/optimization_guide_hint_cache_store/**",
+  "**/AutofillAiModelCache/**",
+  "**/download_cache/**",
+  "**/Safe Browsing/**",
+  "**/BrowserMetrics/**",
+  "**/VideoDecodeStats/**",
+  "**/shared_proto_db/**",
+  "**/OriginTrials/**",
+  "**/CertificateRevocation/**",
+  "**/Subresource Filter/**",
+  "**/MEIPreload/**",
+  "**/appcache/**",
+  "**/htmlcache/**",
+  "**/WebCache/**",
+  "**/CefCache/**",
+  "**/blob_storage/**",
+  "**/Favicons",
+  "**/Favicons-journal",
+]
+
+[rules.context]
+require_ancestor_files_any = [
+  "Local State",
+]
+ancestor_depth = 6
+sample_strategy = "chromium_profile"

@@ -1,0 +1,284 @@
+[[rules]]
+id = "app_system_caches"
+kind = "cache"
+action = "cleanable"
+patterns = [
+  "~/Library/Caches/**",
+  "~/Library/HTTPStorages/**",
+  "~/Library/WebKit/**",
+  "~/Library/Safari/*Cache*",
+  "~/Library/Application Support/Caches/**",
+  "~/Library/Containers/*/Data/Library/Caches/**",
+  "~/Library/Group Containers/*/Library/Caches/**",
+  "~/Library/Daemon Containers/*/Data/Library/Caches/**",
+]
+
+[rules.context]
+sample_strategy = "macos_library_app"
+
+[[rules]]
+id = "container_httpstorages"
+kind = "cache"
+action = "cleanable"
+patterns = [
+  "~/Library/Containers/*/Data/Library/HTTPStorages/**",
+  "~/Library/Daemon Containers/*/Data/Library/HTTPStorages/**",
+]
+
+[rules.context]
+sample_strategy = "macos_library_app"
+
+[[rules]]
+id = "logs"
+kind = "log"
+action = "cleanable"
+patterns = [
+  "~/Library/Logs/**",
+  "**/logs/**",
+  "**/*Logs*/**",
+  "~/Library/Containers/*/Data/Library/Logs/**",
+  "~/Library/Group Containers/*/Logs/**",
+  "~/Library/Group Containers/*/FileProviderLogs/**",
+  "~/Library/Group Containers/*/NotificationExtensionLogs/**",
+  "~/Library/Group Containers/*/Library/Application Support/Logs/**",
+  "~/Library/Daemon Containers/*/Data/Library/Logs/**",
+]
+
+[rules.context]
+sample_strategy = "macos_library_app"
+sample_parent_any = [
+  "logs",
+  "*Logs*",
+]
+
+[[rules]]
+id = "crash_reports"
+kind = "crash"
+action = "cleanable"
+patterns = [
+  "**/Crashpad/**",
+  "**/Crash Reports/**",
+  "~/Library/CrashReporter/**",
+  "~/Library/Application Support/CrashReporter/**",
+  "~/Library/Daemon Containers/*/Data/ReportCrash/**",
+]
+
+[rules.context]
+sample_strategy = "macos_library_app"
+sample_parent_any = [
+  "Crashpad",
+  "Crash Reports",
+]
+
+[[rules]]
+id = "temp_files"
+kind = "temp"
+action = "cleanable"
+patterns = [
+  "**/tmp/**",
+  "**/Temp/**",
+  "**/.temp/**",
+  "**/TemporaryItems/**",
+  "~/Library/Containers/*/Data/tmp/**",
+  "~/Library/Daemon Containers/*/Data/tmp/**",
+  "**/Data/tmp/CFNetworkDownload_*.tmp",
+  "**/BackgroundHttp/**/*.tmp",
+]
+
+[rules.context]
+sample_parent_any = [
+  "tmp",
+  "Temp",
+  ".temp",
+  "TemporaryItems",
+  "BackgroundHttp",
+]
+
+[[rules]]
+id = "updater_caches"
+kind = "cache"
+action = "cleanable"
+patterns = [
+  "**/*Updater*/**",
+  "**/GoogleSoftwareUpdate/**",
+  "**/com.microsoft.autoupdate*/**",
+  "~/Library/Caches/*ShipIt*/**",
+]
+
+[rules.context]
+sample_parent_any = [
+  "*Updater*",
+  "GoogleSoftwareUpdate",
+  "com.microsoft.autoupdate*",
+  "*ShipIt*",
+]
+
+[[rules]]
+id = "app_state"
+kind = "cache"
+action = "caution"
+patterns = [
+  "~/Library/Saved Application State/**",
+  "~/Library/Autosave Information/**",
+]
+
+[rules.context]
+sample_strategy = "macos_library_app"
+
+[[rules]]
+id = "thumbnail_caches"
+kind = "cache"
+action = "cleanable"
+patterns = [
+  "**/thumb_cache/**",
+  "~/.thumbnails/**",
+]
+
+[rules.context]
+sample_parent_any = [
+  "thumb_cache",
+  ".thumbnails",
+]
+
+[[rules]]
+id = "misc_cache_files"
+kind = "cache"
+action = "cleanable"
+patterns = [
+  "**/notices.cache",
+  "**/version_num.cache",
+  "**/device-id.cache",
+  "**/spki-hash.cache",
+  "**/CachedData/**",
+  "**/CachedConfigurations/**",
+  "**/CachedExtensionVSIXs/**",
+  "**/CachedProfilesData/**/extensions.*.cache",
+  "**/node/cache/_cacache/**",
+  "~/Library/Caches/com.apple.tiswitcher.cache",
+  "~/Library/Caches/com.apple.Music/*ArtworkCache/**",
+  "~/Library/Caches/GeoServices/**",
+  "~/Library/Caches/CloudKit/**",
+  "~/Library/Caches/TrickPlay/**",
+  "~/Library/Caches/LSMImageCache/**",
+  "~/Library/Caches/com.apple.findmy.imagecache/**",
+  "~/Library/Caches/ARFileCache/**",
+  "~/Library/Caches/com.apple.cache_delete/**",
+  "~/Library/Metadata/CoreSpotlight/**",
+  "~/Library/Spotlight/ExtensionsCache/**",
+  "~/Library/DoNotDisturb/DB/IconCache/**",
+  "~/Library/Safari/Favicon Cache/**",
+  "~/Library/Safari/Touch Icons Cache/**",
+  "~/Library/Safari/Template Icons/**",
+  "~/Library/Safari/Link Presentation Icons/**",
+  "~/Library/Safari/Metadata Cache/**",
+  "~/Library/Calendars/NotificationIconCache",
+  "~/Library/Mail/V10/MailData/RemoteContentURLCache/**",
+  "~/Library/Messages/*Cache*",
+  "~/Library/SafariSafeBrowsing/**",
+  "**/OfficeFileCache/**",
+]
+
+[rules.context]
+sample_strategy = "macos_library_app"
+sample_parent_any = [
+  "CachedData",
+  "CachedConfigurations",
+  "CachedExtensionVSIXs",
+  "CachedProfilesData",
+  "_cacache",
+  "OfficeFileCache",
+]
+
+[[rules]]
+id = "misc_cache_caution"
+kind = "cache"
+action = "caution"
+patterns = [
+  "~/Library/Caches/com.apple.Spotlight/**",
+  "~/Library/Caches/com.apple.helpd/**/index.spotlightV3",
+  "~/Library/Caches/com.apple.helpd/Generated/com.apple.Preview.help*",
+  "~/Library/Caches/com.apple.parsecd/CustomFeedback/SpotlightResultFeatures/**",
+  "~/Library/Application Support/Spotify/PersistentCache/**",
+  "~/Library/Application Support/Autodesk/DownloadCache/**",
+  "~/Library/Application Support/Autodesk/ActivityInsights/CachedEventsToPost/**",
+]
+
+[rules.context]
+sample_strategy = "macos_library_app"
+
+[[rules]]
+id = "nsurlsessiond_cache"
+kind = "cache"
+action = "cleanable"
+patterns = [
+  "~/Library/Caches/com.apple.nsurlsessiond/**",
+  "~/Library/Containers/*/Data/Library/Caches/com.apple.nsurlsessiond/**",
+  "**/Cache.db",
+  "**/Cache.db-wal",
+  "**/Cache.db-shm",
+]
+
+[rules.context]
+sample_strategy = "macos_library_app"
+
+[[rules]]
+id = "shader_cache"
+kind = "cache"
+action = "cleanable"
+patterns = [
+  "**/*.dxvk-cache",
+]
+
+[[rules]]
+id = "finder_metadata"
+kind = "trash"
+action = "cleanable"
+patterns = [
+  "**/.DS_Store",
+  "**/__MACOSX/**",
+  "**/._*",
+]
+
+[rules.context]
+sample_parent_any = [
+  "__MACOSX",
+]
+
+[[rules]]
+id = "python_cache"
+kind = "build"
+action = "cleanable"
+patterns = [
+  "**/__pycache__/**",
+  "**/*.pyc",
+]
+
+[rules.context]
+sample_parent_any = [
+  "__pycache__",
+]
+
+[[rules]]
+id = "backup_leftovers"
+kind = "trash"
+action = "caution"
+patterns = [
+  "**/*.bak",
+  "**/*.old",
+  "**/*.orig",
+  "**/LOG.old",
+  "**/*~",
+]
+
+[[rules]]
+id = "trash"
+kind = "trash"
+action = "cleanable"
+patterns = [
+  "~/.Trash/**",
+]
+
+[rules.context]
+sample_parent_any = [
+  ".Trash",
+]

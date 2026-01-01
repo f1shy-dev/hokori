@@ -1,0 +1,83 @@
+[[rules]]
+id = "protect_container_roots"
+kind = "system"
+action = "protect"
+patterns = [
+  "~/Library/Containers/*",
+  "~/Library/Group Containers/*",
+  "~/Library/Application Support/*",
+]
+
+[[rules]]
+id = "protect_system_prefs"
+kind = "system"
+action = "protect"
+patterns = [
+  "~/Library/Preferences/**",
+  "~/Library/Keychains/**",
+]
+
+[[rules]]
+id = "protect_sync_vm_data"
+kind = "system"
+action = "protect"
+patterns = [
+  "~/Library/Mobile Documents/**",
+  "~/Library/Application Support/Steam/steamapps/**",
+  "~/OrbStack/**",
+  "~/Virtual Machines.localized/**",
+  "~/VirtualBox VMs/**",
+]
+
+[[rules]]
+id = "protect_extension_node_modules"
+kind = "system"
+action = "protect"
+patterns = [
+  "~/.cursor-nightly/extensions/*/node_modules/**",
+  "~/.windsurf/extensions/*/node_modules/**",
+  "~/Library/Application Support/Zed/*/node_modules/**",
+]
+
+[[rules]]
+id = "protect_browser_data"
+kind = "system"
+action = "protect"
+patterns = [
+  "**/WidevineCdm/**",
+  "**/GCM Store/**",
+  "**/Platform Notifications/**",
+  "**/History",
+  "**/History-journal",
+  "**/Top Sites",
+  "**/Shortcuts",
+  "**/Visited Links",
+  "**/Login Data",
+  "**/Web Data",
+  "**/Bookmarks",
+]
+
+[rules.context]
+require_ancestor_files_any = [
+  "Local State",
+]
+ancestor_depth = 6
+sample_strategy = "chromium_profile"
+
+[[rules]]
+id = "protect_system_data"
+kind = "system"
+action = "protect"
+patterns = [
+  "~/Library/Biome/**",
+  "~/Library/DuetExpertCenter/**",
+  "~/Library/LanguageModeling/**",
+  "~/Library/PersonalizationPortrait/**",
+  "~/Library/Suggestions/**",
+  "~/Library/Trial/**",
+  "~/Library/AppleMediaServices/**",
+  "~/Library/Accounts/persona.cache",
+  "~/Library/Passes/Cards/*.cache",
+  "~/Library/Containers/com.apple.quicklook.*",
+  "~/Library/Application Scripts/com.apple.quicklook.*",
+]
