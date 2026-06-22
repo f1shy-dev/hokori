@@ -1,0 +1,59 @@
+# Review-only file findings. These are never bulk-selected and exist to make
+# large, old, or diagnostic files visible inside the TUI.
+
+[[rules]]
+id = "old-download-archives"
+category = "old-downloads"
+safety = "review"
+impact = "archives may be the only copy of exported or transferred data"
+path_globs = [
+  "~/Downloads/*.zip",
+  "~/Downloads/*.xip",
+  "~/Downloads/*.tar",
+  "~/Downloads/*.tar.gz",
+  "~/Downloads/*.tgz",
+  "~/Downloads/*.7z",
+  "~/Downloads/*.rar",
+]
+min_age_days = 30
+min_file_size = "100MB"
+manual_only = true
+
+[[rules]]
+id = "heap-dumps"
+category = "diagnostic-artifact"
+safety = "review"
+impact = "heap dumps are useful for debugging memory failures but otherwise disposable"
+file_suffixes = [".hprof", ".heapdump"]
+min_age_days = 7
+min_file_size = "10MB"
+manual_only = true
+
+[[rules]]
+id = "old-xcode-result-bundles"
+category = "diagnostic-artifact"
+safety = "review"
+impact = "test results and attachments are lost; Xcode can regenerate future runs"
+roots = [
+  "~/Downloads/*.xcresult",
+  "~/Desktop/*.xcresult",
+  "~/Documents/*.xcresult",
+]
+min_age_days = 30
+min_size = "10MB"
+manual_only = true
+
+[[rules]]
+id = "old-screen-recordings"
+category = "large-old-files"
+safety = "risky"
+impact = "screen recordings may be unique user-created media"
+path_globs = [
+  "~/Desktop/*.mov",
+  "~/Downloads/*.mov",
+  "~/Desktop/*.mp4",
+  "~/Downloads/*.mp4",
+]
+min_age_days = 180
+min_file_size = "500MB"
+manual_only = true

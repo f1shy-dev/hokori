@@ -40,15 +40,24 @@ pub struct RuleDef {
     /// "package-manager-cache", "project-artifact").
     pub category: String,
     pub safety: Safety,
+    /// What this location stores and which application or subsystem owns it.
+    #[serde(default)]
+    pub description: Option<String>,
     /// One human sentence: what deleting this costs the user.
     #[serde(default)]
     pub impact: Option<String>,
+    /// Actionable guidance for deciding whether and how to clean it.
+    #[serde(default)]
+    pub recommendation: Option<String>,
 
     // -- targeted enumeration --
     /// Anchored locations. `~` expands to $HOME; a path component may contain
     /// glob characters (expanded by listing that directory level).
     #[serde(default)]
     pub roots: Vec<String>,
+    /// Ignore file matches when expanding `roots`.
+    #[serde(default)]
+    pub directory_only: bool,
 
     // -- discovery triggers --
     /// Directory basenames that claim their whole subtree on match.
@@ -81,6 +90,10 @@ pub struct RuleDef {
     /// Ignore findings smaller than this (bytes, accepts "10MB" style).
     #[serde(default)]
     pub min_size: Option<String>,
+    /// For file-name/suffix/path-glob rules, ignore individual files below
+    /// this size before aggregating them.
+    #[serde(default)]
+    pub min_file_size: Option<String>,
 
     // -- actions --
     /// Preferred tool-native GC command, e.g. ["pnpm", "store", "prune"].
@@ -90,6 +103,13 @@ pub struct RuleDef {
     /// (e.g. Trash bin, Docker advice).
     #[serde(default)]
     pub report_only: bool,
+    /// Selectable one finding at a time, but never through category/select-all.
+    #[serde(default)]
+    pub manual_only: bool,
+    /// Command-line fragments that indicate this cache's owning app is active.
+    /// An active finding becomes manual-only for the current scan.
+    #[serde(default)]
+    pub process_names: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -114,7 +134,11 @@ pub struct UserConfig {
 /// Rule files compiled into the binary so the tool works from any directory.
 pub const EMBEDDED_RULES: &[(&str, &str)] = &[
     ("macos.toml", include_str!("../rules/macos.toml")),
+    ("system.toml", include_str!("../rules/system.toml")),
+    ("developer.toml", include_str!("../rules/developer.toml")),
+    ("apps.toml", include_str!("../rules/apps.toml")),
     ("projects.toml", include_str!("../rules/projects.toml")),
+    ("analysis.toml", include_str!("../rules/analysis.toml")),
     ("protect.toml", include_str!("../rules/protect.toml")),
 ];
 
@@ -153,7 +177,7 @@ pub fn load_user_config() -> Result<UserConfig> {
     let Some(home) = crate::util::home_dir() else {
         return Ok(UserConfig::default());
     };
-    let path = home.join(".config/cleaner/config.toml");
+    let path = home.join(".config/hokori/config.toml");
     if !path.is_file() {
         return Ok(UserConfig::default());
     }
@@ -190,6 +214,9 @@ fn validate(rules: &[RuleDef]) -> Result<()> {
         }
         if let Some(size) = &rule.min_size {
             parse_size(size).with_context(|| format!("rule {}: bad min_size", rule.id))?;
+        }
+        if let Some(size) = &rule.min_file_size {
+            parse_size(size).with_context(|| format!("rule {}: bad min_file_size", rule.id))?;
         }
     }
     Ok(())

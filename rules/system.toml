@@ -1,0 +1,160 @@
+# Known cache directories that would otherwise fall through to the generic
+# ~/Library/Caches/* rule. These entries provide owner-specific explanations.
+
+[[rules]]
+id = "cloudkit-cache"
+category = "cloud-sync-cache"
+safety = "review"
+description = "Apple's shared local cache for CloudKit records and assets used by apps that synchronize data through iCloud."
+impact = "Apps may need to refetch CloudKit records and assets, rebuild local indexes, or complete a fresh synchronization."
+recommendation = "Normally leave this to macOS. Clean it only when iCloud sync is healthy, important data is confirmed in iCloud or another device, and you accept a potentially long resync."
+roots = ["~/Library/Caches/CloudKit"]
+manual_only = true
+
+[[rules]]
+id = "icloud-drive-cache"
+category = "cloud-sync-cache"
+safety = "risky"
+description = "Local metadata and transfer cache used by Apple's iCloud Drive `bird` service."
+impact = "iCloud Drive may redownload metadata or files and repeat synchronization work; offline availability can change."
+recommendation = "Do not clean during an active sync. Prefer macOS storage controls and only use this for troubleshooting after confirming cloud copies exist."
+roots = ["~/Library/Caches/com.apple.bird"]
+manual_only = true
+
+[[rules]]
+id = "vscode-insiders-updater-cache"
+category = "updater-cache"
+safety = "safe"
+description = "ShipIt/Squirrel update downloads and staging data for Visual Studio Code Insiders."
+impact = "A staged or downloaded update may be discarded and downloaded again."
+recommendation = "Safe after VS Code Insiders is fully closed."
+roots = ["~/Library/Caches/com.microsoft.VSCodeInsiders.ShipIt"]
+process_names = ["/Visual Studio Code - Insiders.app/"]
+
+[[rules]]
+id = "helium-browser-cache"
+category = "browser-cache"
+safety = "review"
+description = "Helium browser runtime, updater, and Chromium cache data stored in macOS's Caches directory."
+impact = "Helium may rebuild browser caches, redownload update data, and lose cached offline content."
+recommendation = "Close Helium first. Review individually because browser cache layouts can include session-adjacent state."
+roots = ["~/Library/Caches/net.imput.helium"]
+process_names = ["/Helium.app/"]
+manual_only = true
+
+[[rules]]
+id = "spotify-runtime-cache"
+category = "media-cache"
+safety = "risky"
+description = "Spotify's Chromium runtime profile, streaming cache, crash database, and other local application state."
+impact = "Spotify may redownload media, rebuild its profile, lose offline/cache state, or require another sign-in."
+recommendation = "Close Spotify and use its own storage controls when possible. Select only if you accept losing local/offline state."
+roots = ["~/Library/Caches/com.spotify.client"]
+process_names = ["/Spotify.app/"]
+manual_only = true
+
+[[rules]]
+id = "pnpm-dlx-cache"
+category = "package-manager-cache"
+safety = "safe"
+description = "Temporary package environments created by `pnpm dlx` and related pnpm cache operations. This is separate from the shared pnpm store."
+impact = "Future `pnpm dlx` commands redownload and recreate their temporary packages."
+recommendation = "Safe when no pnpm or Node task is using a cached temporary environment."
+roots = ["~/Library/Caches/pnpm"]
+process_names = ["Library/Caches/pnpm/", "pnpm dlx"]
+
+[[rules]]
+id = "raycast-cache"
+category = "app-cache"
+safety = "safe"
+description = "Raycast's downloaded assets, extension runtime cache, thumbnails, and updater-related temporary data."
+impact = "Raycast rebuilds or redownloads cached assets and extension data."
+recommendation = "Safe after Raycast and its background process are fully closed."
+roots = ["~/Library/Caches/com.raycast.macos", "~/Library/Caches/com.raycast.macos.ShipIt"]
+process_names = ["/Raycast.app/"]
+
+[[rules]]
+id = "codex-desktop-cache"
+category = "app-cache"
+safety = "review"
+description = "Codex Desktop's UI/runtime cache and downloaded web assets. Project files and conversation state live outside these cache directories."
+impact = "Codex rebuilds runtime caches and may need to redownload assets."
+recommendation = "Close Codex first. Review individually until the app's cache layout is more stable."
+roots = ["~/Library/Caches/Codex", "~/Library/Caches/com.openai.codex"]
+process_names = ["/Codex.app/"]
+manual_only = true
+
+[[rules]]
+id = "apple-geoservices-cache"
+category = "maps-cache"
+safety = "safe"
+description = "Apple geocoding, Maps, and location-service tile/result cache."
+impact = "Maps and location-aware apps refetch map tiles and geocoding results."
+recommendation = "Usually safe, but expect extra network usage and slower first map/location lookups."
+roots = ["~/Library/Caches/GeoServices"]
+
+[[rules]]
+id = "apple-help-cache"
+category = "system-cache"
+safety = "safe"
+description = "Generated indexes and rendered content used by the macOS Help viewer."
+impact = "macOS Help regenerates its index and cached pages."
+recommendation = "Safe to clean when Help Viewer is closed."
+roots = ["~/Library/Caches/com.apple.helpd"]
+
+[[rules]]
+id = "apple-music-cache"
+category = "media-cache"
+safety = "review"
+description = "Apple Music artwork, streaming, catalog, and application cache. Downloaded library media is stored separately, but cache layouts can change."
+impact = "Music may redownload artwork and streaming data and rebuild catalog caches."
+recommendation = "Close Music first. Review individually if you rely on offline playback."
+roots = ["~/Library/Caches/com.apple.Music"]
+process_names = ["/Music.app/"]
+manual_only = true
+
+[[rules]]
+id = "apple-intelligence-cache"
+category = "ai-system-cache"
+safety = "review"
+description = "Runtime metadata, compiled assets, and temporary results used by Apple Intelligence and visual-intelligence services."
+impact = "macOS may rebuild or redownload intelligence assets and repeat background analysis."
+recommendation = "Leave these system-managed caches alone unless they are abnormally large or you are troubleshooting. Select individually only."
+roots = [
+  "~/Library/Caches/com.apple.intelligenceflow.intelligenceflowd",
+  "~/Library/Caches/com.apple.VisualIntelligenceCore",
+  "~/Library/Caches/com.apple.e5rt.e5bundlecache",
+  "~/Library/Caches/com.apple.FeatureAccessAgent",
+  "~/Library/Caches/com.apple.parsecd",
+]
+manual_only = true
+
+[[rules]]
+id = "apple-account-auth-cache"
+category = "account-cache"
+safety = "risky"
+description = "Authentication and account metadata caches used by Apple ID, Store, and account services."
+impact = "Apple services may require reauthentication, rebuild account state, or temporarily fail while caches recover."
+recommendation = "Do not clean routinely. Use only while troubleshooting account or sign-in problems and after confirming credentials are available."
+roots = [
+  "~/Library/Caches/com.apple.akd",
+  "~/Library/Caches/com.apple.accountsd",
+  "~/Library/Caches/com.apple.appleaccountd",
+  "~/Library/Caches/com.apple.storekitagent",
+  "~/Library/Caches/com.apple.appstoreagent",
+]
+manual_only = true
+
+[[rules]]
+id = "apple-media-services-cache"
+category = "media-cache"
+safety = "review"
+description = "Caches used by Apple Media Services, App Store media, artwork, and cloud-library processes."
+impact = "Artwork, catalog metadata, and Store media are fetched again; services may briefly reindex."
+recommendation = "Usually regenerable, but clean individually and avoid doing so during downloads, purchases, or library synchronization."
+roots = [
+  "~/Library/Caches/com.apple.ampartworkagent",
+  "~/Library/Caches/com.apple.itunescloudd",
+  "~/Library/Caches/com.apple.iTunes",
+]
+manual_only = true

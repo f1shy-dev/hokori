@@ -151,9 +151,9 @@ mod macos {
             Ok(entries) => Some(entries),
             Err(BulkFailure::Open) => super::portable::list_dir(path),
             Err(error) => {
-                if std::env::var_os("CLEANER_TRACE_WALK").is_some() {
+                if std::env::var_os("HOKORI_TRACE_WALK").is_some() {
                     eprintln!(
-                        "cleaner: getattrlistbulk fallback for {}: {error}",
+                        "hokori: getattrlistbulk fallback for {}: {error}",
                         path.display()
                     );
                 }
@@ -493,7 +493,7 @@ mod tests {
     /// this guards the attribute packing order in the macOS backend.
     #[test]
     fn list_dir_matches_std_fs() {
-        let dir = std::env::temp_dir().join("cleaner-walk-test");
+        let dir = std::env::temp_dir().join("hokori-walk-test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("subdir")).unwrap();
         std::fs::write(dir.join("file.txt"), vec![0u8; 10_000]).unwrap();

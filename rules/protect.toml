@@ -54,17 +54,6 @@ roots = [
   "~/Library/Caches/com.apple.preferencepanes*",
 ]
 
-# Expensive-to-recreate caches that look like junk (mole's default whitelist).
-[[rules]]
-id = "protect-expensive-caches"
-category = "protect"
-safety = "protected"
-roots = [
-  "~/Library/Caches/ms-playwright",
-  "~/.cache/huggingface",
-  "~/.ollama/models",
-]
-
 # VM / container disk images masquerading as app data.
 [[rules]]
 id = "protect-vm-data"

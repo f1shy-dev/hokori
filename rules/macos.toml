@@ -5,10 +5,13 @@
 [[rules]]
 id = "user-app-caches"
 category = "app-cache"
-safety = "safe"
-impact = "apps rebuild their caches on next launch"
+safety = "review"
+description = "A top-level directory inside macOS's per-user Caches folder. The owning app and exact contents are not known to this generic fallback rule."
+impact = "unknown apps usually rebuild caches, but app-specific behavior varies"
+recommendation = "Review the bundle-style folder name and close the owning app. Prefer a specific rule when one is available; generic app caches are never bulk-selected."
 roots = ["~/Library/Caches/*"]
 min_size = "1MB"
+manual_only = true
 
 [[rules]]
 id = "homebrew-cache"
@@ -37,9 +40,12 @@ roots = ["~/Library/Application Support/CrashReporter"]
 id = "http-storages"
 category = "app-cache"
 safety = "review"
+description = "Per-app CFNetwork and HTTP storage used for cached responses and network state. Some applications also keep session-adjacent state here."
 impact = "per-app HTTP state (HSTS, cookies-adjacent); some apps re-prompt"
+recommendation = "Close the owning app and select individually only if you accept renewed network downloads or sign-in prompts."
 roots = ["~/Library/HTTPStorages/*"]
 min_size = "1MB"
+manual_only = true
 
 [[rules]]
 id = "saved-app-state"
@@ -54,7 +60,9 @@ min_size = "1MB"
 id = "electron-caches"
 category = "browser-cache"
 safety = "safe"
+description = "Chromium/Electron runtime caches such as compiled code, GPU shaders, crash reports, and component downloads."
 impact = "Electron apps rebuild these caches on next launch"
+recommendation = "Usually safe after the owning app is fully closed. This generic rule is manual-only because some Electron apps use unusual layouts."
 roots = [
   "~/Library/Application Support/*/Cache",
   "~/Library/Application Support/*/Code Cache",
@@ -65,14 +73,18 @@ roots = [
   "~/Library/Application Support/*/component_crx_cache",
 ]
 min_size = "1MB"
+manual_only = true
 
 [[rules]]
 id = "service-worker-caches"
 category = "browser-cache"
 safety = "review"
+description = "Offline response data stored by web apps and Electron applications through Service Workers."
 impact = "offline data for web apps (PWAs lose offline state, not logins)"
+recommendation = "Delete only if losing offline availability is acceptable, and close the owning browser or app first."
 roots = ["~/Library/Application Support/*/Service Worker/CacheStorage"]
 min_size = "10MB"
+manual_only = true
 
 [[rules]]
 id = "xcode-derived-data"
@@ -89,6 +101,7 @@ safety = "review"
 impact = "you lose dSYMs needed to symbolicate shipped builds"
 roots = ["~/Library/Developer/Xcode/Archives/*"]
 min_age_days = 60
+manual_only = true
 
 [[rules]]
 id = "xcode-device-support"
@@ -114,7 +127,11 @@ id = "swiftpm-cache"
 category = "package-manager-cache"
 safety = "safe"
 impact = "packages are re-fetched on next resolve"
-roots = ["~/Library/org.swift.swiftpm", "~/.swiftpm"]
+roots = [
+  "~/.swiftpm/cache",
+  "~/Library/Caches/org.swift.swiftpm",
+  "~/Library/org.swift.swiftpm/cache",
+]
 
 [[rules]]
 id = "npm-cache"
@@ -151,8 +168,10 @@ clean_via = ["pnpm", "store", "prune"]
 id = "cargo-registry"
 category = "package-manager-cache"
 safety = "safe"
-impact = "crates are re-downloaded / re-extracted on next build"
-roots = ["~/.cargo/registry/cache", "~/.cargo/registry/src"]
+description = "Cargo's crates.io index, downloaded crate archives, and extracted dependency source."
+impact = "crates are re-downloaded and re-extracted on the next Rust build"
+recommendation = "Safe to remove when Cargo is idle; the next build may take substantially longer."
+roots = ["~/.cargo/registry"]
 
 [[rules]]
 id = "gradle-caches"
@@ -201,7 +220,7 @@ category = "backups"
 safety = "risky"
 impact = "local iPhone/iPad backups; delete only if backed up elsewhere"
 roots = ["~/Library/Application Support/MobileSync/Backup/*"]
-report_only = true
+manual_only = true
 
 [[rules]]
 id = "downloads-installers"
@@ -212,5 +231,8 @@ path_globs = [
   "~/Downloads/*.dmg",
   "~/Downloads/*.pkg",
   "~/Downloads/*.iso",
+  "~/Downloads/*.xip",
 ]
 min_age_days = 30
+min_file_size = "10MB"
+manual_only = true

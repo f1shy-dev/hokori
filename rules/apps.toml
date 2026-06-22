@@ -1,0 +1,554 @@
+# App-specific caches outside ~/Library/Caches. Generic cache directories are
+# already covered by user-app-caches; these rules add deeper, safer targets.
+
+[[rules]]
+id = "vscode-runtime-cache"
+category = "ide-cache"
+safety = "safe"
+impact = "VS Code rebuilds runtime, extension-download, and GPU caches"
+roots = [
+  "~/Library/Application Support/Code/Cache",
+  "~/Library/Application Support/Code/Code Cache",
+  "~/Library/Application Support/Code/GPUCache",
+  "~/Library/Application Support/Code/DawnGraphiteCache",
+  "~/Library/Application Support/Code/DawnWebGPUCache",
+  "~/Library/Application Support/Code/CachedData",
+  "~/Library/Application Support/Code/CachedExtensions",
+  "~/Library/Application Support/Code/CachedExtensionVSIXs",
+  "~/Library/Application Support/Code/component_crx_cache",
+  "~/Library/Application Support/Code/Crashpad/completed",
+  "~/Library/Application Support/Code/logs",
+]
+process_names = ["/Visual Studio Code.app/"]
+
+[[rules]]
+id = "vscode-insiders-runtime-cache"
+category = "ide-cache"
+safety = "safe"
+impact = "VS Code Insiders rebuilds runtime, extension-download, and GPU caches"
+roots = [
+  "~/Library/Application Support/Code - Insiders/Cache",
+  "~/Library/Application Support/Code - Insiders/Code Cache",
+  "~/Library/Application Support/Code - Insiders/GPUCache",
+  "~/Library/Application Support/Code - Insiders/DawnGraphiteCache",
+  "~/Library/Application Support/Code - Insiders/DawnWebGPUCache",
+  "~/Library/Application Support/Code - Insiders/CachedData",
+  "~/Library/Application Support/Code - Insiders/CachedExtensions",
+  "~/Library/Application Support/Code - Insiders/CachedExtensionVSIXs",
+  "~/Library/Application Support/Code - Insiders/component_crx_cache",
+  "~/Library/Application Support/Code - Insiders/Crashpad/completed",
+  "~/Library/Application Support/Code - Insiders/logs",
+]
+process_names = ["/Visual Studio Code - Insiders.app/"]
+
+[[rules]]
+id = "cursor-runtime-cache"
+category = "ide-cache"
+safety = "safe"
+impact = "Cursor rebuilds runtime, extension-download, and GPU caches"
+roots = [
+  "~/Library/Application Support/Cursor/Cache",
+  "~/Library/Application Support/Cursor/Code Cache",
+  "~/Library/Application Support/Cursor/GPUCache",
+  "~/Library/Application Support/Cursor/DawnGraphiteCache",
+  "~/Library/Application Support/Cursor/DawnWebGPUCache",
+  "~/Library/Application Support/Cursor/CachedData",
+  "~/Library/Application Support/Cursor/CachedExtensions",
+  "~/Library/Application Support/Cursor/CachedExtensionVSIXs",
+  "~/Library/Application Support/Cursor/component_crx_cache",
+  "~/Library/Application Support/Cursor/Crashpad/completed",
+  "~/Library/Application Support/Cursor/logs",
+]
+process_names = ["/Cursor.app/"]
+
+[[rules]]
+id = "windsurf-runtime-cache"
+category = "ide-cache"
+safety = "safe"
+impact = "Windsurf rebuilds runtime, extension-download, and GPU caches"
+roots = [
+  "~/Library/Application Support/Windsurf/Cache",
+  "~/Library/Application Support/Windsurf/Code Cache",
+  "~/Library/Application Support/Windsurf/GPUCache",
+  "~/Library/Application Support/Windsurf/DawnGraphiteCache",
+  "~/Library/Application Support/Windsurf/DawnWebGPUCache",
+  "~/Library/Application Support/Windsurf/CachedData",
+  "~/Library/Application Support/Windsurf/CachedExtensions",
+  "~/Library/Application Support/Windsurf/CachedExtensionVSIXs",
+  "~/Library/Application Support/Windsurf/component_crx_cache",
+  "~/Library/Application Support/Windsurf/Crashpad/completed",
+  "~/Library/Application Support/Windsurf/logs",
+]
+process_names = ["/Windsurf.app/"]
+
+[[rules]]
+id = "zed-cache"
+category = "ide-cache"
+safety = "safe"
+impact = "Zed rebuilds caches and diagnostic logs"
+roots = [
+  "~/Library/Caches/Zed",
+  "~/Library/Logs/Zed",
+  "~/Library/Application Support/Zed/node/cache",
+]
+process_names = ["/Zed.app/"]
+
+[[rules]]
+id = "jetbrains-cache"
+category = "ide-cache"
+safety = "review"
+impact = "JetBrains IDEs rebuild indexes, local history caches, and downloaded resources"
+roots = ["~/Library/Caches/JetBrains/*", "~/Library/Logs/JetBrains/*"]
+process_names = [
+  "/IntelliJ IDEA.app/",
+  "/DataGrip.app/",
+  "/PyCharm.app/",
+  "/WebStorm.app/",
+  "/GoLand.app/",
+  "/CLion.app/",
+  "/Rider.app/",
+  "/RubyMine.app/",
+  "/PhpStorm.app/",
+]
+min_age_days = 14
+
+[[rules]]
+id = "xcode-cache"
+category = "dev-cache"
+safety = "safe"
+impact = "Xcode rebuilds caches, source-control metadata, and documentation indexes"
+roots = [
+  "~/Library/Caches/com.apple.dt.Xcode",
+  "~/Library/Caches/com.apple.dt.xcodebuild",
+  "~/Library/Caches/com.apple.dt.Xcode.sourcecontrol.Git",
+  "~/Library/Developer/Xcode/DocumentationCache",
+  "~/Library/Developer/Xcode/DocumentationIndex",
+]
+process_names = ["/Xcode.app/"]
+
+[[rules]]
+id = "xcode-device-logs"
+category = "logs"
+safety = "safe"
+impact = "device and simulator diagnostic logs are removed"
+roots = [
+  "~/Library/Developer/Xcode/iOS Device Logs",
+  "~/Library/Developer/Xcode/watchOS Device Logs",
+  "~/Library/Logs/CoreSimulator",
+]
+process_names = ["/Xcode.app/", "/Simulator.app/"]
+min_age_days = 14
+
+[[rules]]
+id = "xcode-build-products"
+category = "dev-cache"
+safety = "review"
+impact = "Xcode build products are regenerated by later builds"
+roots = ["~/Library/Developer/Xcode/Products/*"]
+process_names = ["/Xcode.app/"]
+min_age_days = 14
+
+[[rules]]
+id = "cached-apple-firmware"
+category = "device-firmware"
+safety = "review"
+impact = "iPhone, iPad, Apple TV, or Apple Watch firmware must be downloaded again"
+roots = [
+  "~/Library/iTunes/*Software Updates/*.ipsw",
+  "~/Library/Group Containers/*group.com.apple.configurator*/Library/Caches/*.ipsw",
+]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "docker-user-cache"
+category = "virtualization-cache"
+safety = "review"
+impact = "Docker rebuilds local build metadata, CLI downloads, logs, and temporary data"
+roots = [
+  "~/.docker/buildx/cache",
+  "~/.docker/cli-plugins/.cache",
+  "~/Library/Containers/com.docker.docker/Data/cache",
+  "~/Library/Containers/com.docker.docker/Data/log",
+  "~/Library/Containers/com.docker.docker/Data/tmp",
+  "~/Library/Group Containers/group.com.docker/Caches",
+]
+process_names = ["/Docker.app/", "com.docker.backend"]
+min_age_days = 14
+
+[[rules]]
+id = "podman-cache"
+category = "virtualization-cache"
+safety = "review"
+impact = "Podman recreates cached container metadata and downloads"
+roots = ["~/.local/share/containers/cache"]
+process_names = ["podman machine", "/Podman Desktop.app/"]
+min_age_days = 14
+
+[[rules]]
+id = "chrome-profile-cache"
+category = "browser-cache"
+safety = "safe"
+impact = "Chrome rebuilds code, GPU, shader, and crash-report caches"
+roots = [
+  "~/Library/Application Support/Google/Chrome/*/Application Cache",
+  "~/Library/Application Support/Google/Chrome/*/Code Cache",
+  "~/Library/Application Support/Google/Chrome/*/GPUCache",
+  "~/Library/Application Support/Google/Chrome/*/DawnCache",
+  "~/Library/Application Support/Google/Chrome/*/GrShaderCache",
+  "~/Library/Application Support/Google/Chrome/*/GraphiteDawnCache",
+  "~/Library/Application Support/Google/Chrome/ShaderCache",
+  "~/Library/Application Support/Google/Chrome/GrShaderCache",
+  "~/Library/Application Support/Google/Chrome/GraphiteDawnCache",
+  "~/Library/Application Support/Google/Chrome/component_crx_cache",
+  "~/Library/Application Support/Google/Chrome/Crashpad/completed",
+]
+process_names = ["/Google Chrome.app/"]
+
+[[rules]]
+id = "chrome-service-worker-cache"
+category = "browser-cache"
+safety = "review"
+impact = "offline web-app data is rebuilt; PWAs may lose offline availability"
+roots = ["~/Library/Application Support/Google/Chrome/*/Service Worker/CacheStorage"]
+process_names = ["/Google Chrome.app/"]
+manual_only = true
+min_size = "10MB"
+
+[[rules]]
+id = "brave-profile-cache"
+category = "browser-cache"
+safety = "safe"
+impact = "Brave rebuilds code, GPU, shader, and crash-report caches"
+roots = [
+  "~/Library/Application Support/BraveSoftware/Brave-Browser/*/Application Cache",
+  "~/Library/Application Support/BraveSoftware/Brave-Browser/*/Code Cache",
+  "~/Library/Application Support/BraveSoftware/Brave-Browser/*/GPUCache",
+  "~/Library/Application Support/BraveSoftware/Brave-Browser/*/DawnCache",
+  "~/Library/Application Support/BraveSoftware/Brave-Browser/*/GrShaderCache",
+  "~/Library/Application Support/BraveSoftware/Brave-Browser/*/GraphiteDawnCache",
+  "~/Library/Application Support/BraveSoftware/Brave-Browser/ShaderCache",
+  "~/Library/Application Support/BraveSoftware/Brave-Browser/GrShaderCache",
+  "~/Library/Application Support/BraveSoftware/Brave-Browser/GraphiteDawnCache",
+  "~/Library/Application Support/BraveSoftware/Brave-Browser/component_crx_cache",
+  "~/Library/Application Support/BraveSoftware/Brave-Browser/Crashpad/completed",
+]
+process_names = ["/Brave Browser.app/"]
+
+[[rules]]
+id = "edge-profile-cache"
+category = "browser-cache"
+safety = "safe"
+impact = "Edge rebuilds code, GPU, shader, and crash-report caches"
+roots = [
+  "~/Library/Application Support/Microsoft Edge/*/Code Cache",
+  "~/Library/Application Support/Microsoft Edge/*/GPUCache",
+  "~/Library/Application Support/Microsoft Edge/*/DawnCache",
+  "~/Library/Application Support/Microsoft Edge/*/GrShaderCache",
+  "~/Library/Application Support/Microsoft Edge/*/GraphiteDawnCache",
+  "~/Library/Application Support/Microsoft Edge/ShaderCache",
+  "~/Library/Application Support/Microsoft Edge/GrShaderCache",
+  "~/Library/Application Support/Microsoft Edge/GraphiteDawnCache",
+  "~/Library/Application Support/Microsoft Edge/Crashpad/completed",
+]
+process_names = ["/Microsoft Edge.app/"]
+
+[[rules]]
+id = "arc-profile-cache"
+category = "browser-cache"
+safety = "safe"
+impact = "Arc rebuilds code, GPU, shader, and crash-report caches"
+roots = [
+  "~/Library/Application Support/Arc/*/Code Cache",
+  "~/Library/Application Support/Arc/*/GPUCache",
+  "~/Library/Application Support/Arc/*/DawnCache",
+  "~/Library/Application Support/Arc/*/GrShaderCache",
+  "~/Library/Application Support/Arc/*/GraphiteDawnCache",
+  "~/Library/Application Support/Arc/User Data/*/Code Cache",
+  "~/Library/Application Support/Arc/User Data/*/GPUCache",
+  "~/Library/Application Support/Arc/User Data/*/DawnCache",
+  "~/Library/Application Support/Arc/User Data/*/GrShaderCache",
+  "~/Library/Application Support/Arc/User Data/*/GraphiteDawnCache",
+  "~/Library/Application Support/Arc/User Data/ShaderCache",
+  "~/Library/Application Support/Arc/User Data/GrShaderCache",
+  "~/Library/Application Support/Arc/User Data/GraphiteDawnCache",
+  "~/Library/Application Support/Arc/User Data/component_crx_cache",
+  "~/Library/Application Support/Arc/User Data/extensions_crx_cache",
+  "~/Library/Application Support/Arc/User Data/Crashpad/completed",
+]
+process_names = ["/Arc.app/"]
+
+[[rules]]
+id = "vivaldi-profile-cache"
+category = "browser-cache"
+safety = "safe"
+impact = "Vivaldi rebuilds code, GPU, shader, and crash-report caches"
+roots = [
+  "~/Library/Application Support/Vivaldi/*/Code Cache",
+  "~/Library/Application Support/Vivaldi/*/GPUCache",
+  "~/Library/Application Support/Vivaldi/*/DawnCache",
+  "~/Library/Application Support/Vivaldi/*/GrShaderCache",
+  "~/Library/Application Support/Vivaldi/*/GraphiteDawnCache",
+  "~/Library/Application Support/Vivaldi/ShaderCache",
+  "~/Library/Application Support/Vivaldi/GrShaderCache",
+  "~/Library/Application Support/Vivaldi/GraphiteDawnCache",
+  "~/Library/Application Support/Vivaldi/Crashpad/completed",
+]
+process_names = ["/Vivaldi.app/"]
+
+[[rules]]
+id = "chromium-profile-cache"
+category = "browser-cache"
+safety = "safe"
+impact = "Chromium rebuilds code, GPU, and shader caches"
+roots = [
+  "~/Library/Application Support/Chromium/*/Code Cache",
+  "~/Library/Application Support/Chromium/*/GPUCache",
+  "~/Library/Application Support/Chromium/*/DawnCache",
+  "~/Library/Application Support/Chromium/ShaderCache",
+  "~/Library/Application Support/Chromium/GrShaderCache",
+  "~/Library/Application Support/Chromium/GraphiteDawnCache",
+]
+process_names = ["/Chromium.app/"]
+
+[[rules]]
+id = "firefox-profile-cache"
+category = "browser-cache"
+safety = "safe"
+impact = "Firefox rebuilds HTTP and profile caches"
+roots = [
+  "~/Library/Caches/Firefox",
+  "~/Library/Application Support/Firefox/Profiles/*/cache2",
+]
+process_names = ["/Firefox.app/"]
+
+[[rules]]
+id = "messages-preview-cache"
+category = "message-cache"
+safety = "safe"
+impact = "Messages regenerates sticker and attachment previews; original attachments are untouched"
+roots = [
+  "~/Library/Messages/StickerCache",
+  "~/Library/Messages/Caches/Previews/Attachments",
+  "~/Library/Messages/Caches/Previews/StickerCache",
+]
+process_names = ["/Messages.app/"]
+
+[[rules]]
+id = "mail-downloads"
+category = "mail-attachments"
+safety = "risky"
+impact = "downloaded attachment copies are removed and may need to be downloaded from Mail again"
+roots = [
+  "~/Library/Mail Downloads",
+  "~/Library/Containers/com.apple.mail/Data/Library/Mail Downloads",
+]
+process_names = ["/Mail.app/"]
+manual_only = true
+min_age_days = 90
+
+[[rules]]
+id = "adobe-media-cache"
+category = "creative-cache"
+safety = "review"
+impact = "Adobe applications rebuild conformed audio, peak files, and media caches"
+roots = [
+  "~/Library/Application Support/Adobe/Common/Media Cache",
+  "~/Library/Application Support/Adobe/Common/Media Cache Files",
+  "~/Library/Application Support/Adobe/Common/Peak Files",
+]
+process_names = ["/Adobe Premiere Pro", "/After Effects", "/Media Encoder"]
+manual_only = true
+min_age_days = 14
+
+[[rules]]
+id = "final-cut-generated-media"
+category = "creative-cache"
+safety = "review"
+impact = "Final Cut Pro regenerates proxy and render media; regeneration can take significant time"
+roots = [
+  "~/Movies/*.fcpbundle/*/Render Files/High Quality Media",
+  "~/Movies/*.fcpbundle/*/Transcoded Media/Proxy Media",
+]
+process_names = ["/Final Cut Pro.app/"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "steam-app-cache"
+category = "game-cache"
+safety = "safe"
+impact = "Steam rebuilds app metadata, web caches, and logs"
+roots = [
+  "~/Library/Application Support/Steam/appcache",
+  "~/Library/Application Support/Steam/htmlcache",
+  "~/Library/Application Support/Steam/logs",
+]
+process_names = ["/Steam.app/"]
+
+[[rules]]
+id = "steam-download-cache"
+category = "game-cache"
+safety = "review"
+impact = "Steam redownloads depot and shader data; incomplete downloads may be discarded"
+roots = [
+  "~/Library/Application Support/Steam/depotcache",
+  "~/Library/Application Support/Steam/steamapps/shadercache",
+  "~/Library/Application Support/Steam/steamapps/temp",
+  "~/Library/Application Support/Steam/steamapps/downloading",
+]
+process_names = ["/Steam.app/"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "minecraft-cache"
+category = "game-cache"
+safety = "safe"
+impact = "Minecraft recreates launcher web caches and diagnostic logs"
+roots = [
+  "~/Library/Application Support/minecraft/logs",
+  "~/Library/Application Support/minecraft/crash-reports",
+  "~/Library/Application Support/minecraft/webcache",
+  "~/Library/Application Support/minecraft/webcache2",
+]
+process_names = ["/Minecraft.app/", "minecraft-launcher"]
+
+[[rules]]
+id = "obsidian-cache"
+category = "app-cache"
+safety = "safe"
+impact = "Obsidian rebuilds Electron runtime caches and logs; vault files are untouched"
+roots = [
+  "~/Library/Application Support/obsidian/Cache",
+  "~/Library/Application Support/obsidian/Code Cache",
+  "~/Library/Application Support/obsidian/GPUCache",
+  "~/Library/Application Support/obsidian/DawnGraphiteCache",
+  "~/Library/Application Support/obsidian/DawnWebGPUCache",
+  "~/Library/Application Support/obsidian/Crashpad/completed",
+  "~/Library/Application Support/obsidian/logs",
+]
+process_names = ["/Obsidian.app/"]
+
+[[rules]]
+id = "teams-cache"
+category = "communication-cache"
+safety = "review"
+impact = "Teams rebuilds runtime and web caches; offline state may be lost"
+roots = [
+  "~/Library/Application Support/Microsoft/Teams/Cache",
+  "~/Library/Application Support/Microsoft/Teams/Application Cache",
+  "~/Library/Application Support/Microsoft/Teams/Code Cache",
+  "~/Library/Application Support/Microsoft/Teams/GPUCache",
+  "~/Library/Application Support/Microsoft/Teams/tmp",
+  "~/Library/Application Support/Microsoft/Teams/logs",
+]
+process_names = ["/Microsoft Teams.app/", "/Microsoft Teams classic.app/"]
+manual_only = true
+
+[[rules]]
+id = "dropbox-cache"
+category = "cloud-cache"
+safety = "review"
+impact = "Dropbox recreates local cache entries; ensure syncing is complete first"
+roots = ["~/Dropbox/.dropbox.cache"]
+process_names = ["/Dropbox.app/"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "google-drive-content-cache"
+category = "cloud-cache"
+safety = "risky"
+impact = "offline Google Drive file content is removed and must be downloaded again"
+roots = ["~/Library/Application Support/Google/DriveFS/*/content_cache"]
+process_names = ["/Google Drive.app/"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "claude-runtime-cache"
+category = "app-cache"
+safety = "safe"
+description = "Claude Desktop's Chromium runtime caches, crash reports, and logs. Conversation and local-agent session data are excluded."
+impact = "Claude rebuilds runtime caches and may redownload web assets."
+recommendation = "Close Claude before cleaning. Do not remove IndexedDB, Local Storage, or local-agent sessions."
+roots = [
+  "~/Library/Application Support/Claude/Cache",
+  "~/Library/Application Support/Claude/Code Cache",
+  "~/Library/Application Support/Claude/GPUCache",
+  "~/Library/Application Support/Claude/DawnGraphiteCache",
+  "~/Library/Application Support/Claude/DawnWebGPUCache",
+  "~/Library/Application Support/Claude/Crashpad/completed",
+  "~/Library/Application Support/Claude/logs",
+]
+process_names = ["/Claude.app/"]
+
+[[rules]]
+id = "chatgpt-runtime-cache"
+category = "app-cache"
+safety = "review"
+description = "ChatGPT Desktop runtime, GPU, web-resource, crash, and log caches."
+impact = "ChatGPT rebuilds caches and may redownload application resources."
+recommendation = "Close ChatGPT and review paths individually until its storage layout is stable."
+roots = [
+  "~/Library/Application Support/ChatGPT/Cache",
+  "~/Library/Application Support/ChatGPT/Code Cache",
+  "~/Library/Application Support/ChatGPT/GPUCache",
+  "~/Library/Application Support/ChatGPT/DawnGraphiteCache",
+  "~/Library/Application Support/ChatGPT/DawnWebGPUCache",
+  "~/Library/Application Support/ChatGPT/Crashpad/completed",
+  "~/Library/Application Support/ChatGPT/logs",
+]
+process_names = ["/ChatGPT.app/"]
+manual_only = true
+
+[[rules]]
+id = "lm-studio-runtime-cache"
+category = "app-cache"
+safety = "safe"
+description = "LM Studio UI, GPU, update, and runtime caches. Model directories are handled separately."
+impact = "LM Studio rebuilds UI caches and may redownload application assets."
+recommendation = "Close LM Studio before cleaning."
+roots = [
+  "~/Library/Application Support/LM Studio/Cache",
+  "~/Library/Application Support/LM Studio/Code Cache",
+  "~/Library/Application Support/LM Studio/GPUCache",
+  "~/Library/Application Support/LM Studio/logs",
+  "~/Library/Caches/LM Studio",
+]
+process_names = ["/LM Studio.app/"]
+
+[[rules]]
+id = "slack-runtime-cache"
+category = "communication-cache"
+safety = "review"
+description = "Slack's Electron runtime, GPU, service-worker, and log caches."
+impact = "Slack refetches workspace assets and may lose offline availability."
+recommendation = "Close Slack and review service-worker data before cleaning."
+roots = [
+  "~/Library/Application Support/Slack/Cache",
+  "~/Library/Application Support/Slack/Code Cache",
+  "~/Library/Application Support/Slack/GPUCache",
+  "~/Library/Application Support/Slack/Service Worker/CacheStorage",
+  "~/Library/Application Support/Slack/logs",
+]
+process_names = ["/Slack.app/"]
+manual_only = true
+
+[[rules]]
+id = "discord-runtime-cache"
+category = "communication-cache"
+safety = "review"
+description = "Discord's Electron runtime, GPU, service-worker, and log caches."
+impact = "Discord refetches media and application assets."
+recommendation = "Close Discord before cleaning; review offline web data."
+roots = [
+  "~/Library/Application Support/discord/Cache",
+  "~/Library/Application Support/discord/Code Cache",
+  "~/Library/Application Support/discord/GPUCache",
+  "~/Library/Application Support/discord/Service Worker/CacheStorage",
+  "~/Library/Application Support/discord/logs",
+]
+process_names = ["/Discord.app/"]
+manual_only = true

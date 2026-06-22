@@ -12,19 +12,21 @@
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::compiler::{CompiledRule, Engine};
 use crate::gitignore::GitIgnoreStack;
-use crate::report::{Finding, Progress};
+use crate::report::{Confidence, Finding, FindingSize, FindingState, FindingTarget, Progress};
 use crate::rules::Safety;
+use crate::taxonomy::category_info;
 use crate::walk::{self, Entry, InodeDedupe, SubtreeStats};
 
 /// Streaming events for the TUI. `None` sink = batch (CLI) mode.
 pub enum ScanEvent {
-    Found(Finding),
+    Found(Box<Finding>),
     Phase(&'static str),
+    ProviderStatus(crate::providers::ProviderStatus),
     Done,
 }
 
@@ -34,6 +36,9 @@ pub struct ScanCtx<'a> {
     pub engine: &'a Engine,
     pub dedupe: &'a InodeDedupe,
     pub progress: Option<&'a Progress>,
+    pub running_commands: &'a [String],
+    pub repositories: Option<&'a Mutex<HashSet<PathBuf>>>,
+    pub reference_files: Option<&'a Mutex<Vec<PathBuf>>>,
     pub now: i64,
     pub sink: Sink<'a>,
     pub cancel: Option<&'a AtomicBool>,
@@ -54,7 +59,7 @@ impl ScanCtx<'_> {
         };
         let delivered = sink
             .lock()
-            .map(|tx| tx.send(ScanEvent::Found(finding)).is_ok())
+            .map(|tx| tx.send(ScanEvent::Found(Box::new(finding))).is_ok())
             .unwrap_or(false);
         if !delivered && let Some(cancel) = self.cancel {
             cancel.store(true, Ordering::Relaxed);
@@ -75,23 +80,51 @@ fn make_finding(
     path: PathBuf,
     stats: SubtreeStats,
     effective_mtime: i64,
-    now: i64,
+    ctx: &ScanCtx,
 ) -> Finding {
+    let now = ctx.now;
     let recent =
         rule.min_age_secs > 0 && effective_mtime > 0 && (now - effective_mtime) < rule.min_age_secs;
+    let in_use = rule.process_names_lower.iter().any(|process| {
+        ctx.running_commands
+            .iter()
+            .any(|command| command.contains(process))
+    });
+    let category = category_info(&rule.def.category);
     Finding {
+        stable_id: format!("path:{}:{}", rule.def.id, path.to_string_lossy()),
         rule_id: rule.def.id.clone(),
         category: rule.def.category.clone(),
+        section: category.section,
+        subgroup: category.subgroup,
         safety: rule.def.safety,
+        target: FindingTarget::Filesystem { path: path.clone() },
         path,
         bytes: stats.bytes,
+        size: FindingSize::exact_physical(stats.bytes),
         files: stats.files,
         dirs: stats.dirs,
         age_days: age_days(now, effective_mtime),
         recent,
         report_only: rule.def.report_only,
-        manual_only: false,
+        in_use,
+        manual_only: rule.def.manual_only || in_use,
+        confidence: Confidence::High,
+        state: if in_use {
+            FindingState::InUse
+        } else if recent {
+            FindingState::Recent
+        } else {
+            FindingState::Candidate
+        },
+        provider: None,
+        reason: String::new(),
+        evidence: Vec::new(),
+        native_action: None,
+        supersedes: Vec::new(),
+        description: rule.def.description.clone(),
         impact: rule.def.impact.clone(),
+        recommendation: rule.def.recommendation.clone(),
         clean_via: rule.def.clean_via.clone(),
         member_paths: Vec::new(),
     }
@@ -164,6 +197,13 @@ pub fn targeted_scan(ctx: &ScanCtx) -> TargetedResult {
             if ctx.is_cancelled() {
                 break;
             }
+            if ctx.engine.rules[*rule_idx].def.directory_only
+                && !path
+                    .symlink_metadata()
+                    .is_ok_and(|metadata| metadata.is_dir())
+            {
+                continue;
+            }
             let path_str = path.to_string_lossy();
             if ctx.engine.is_protected(&path_str) {
                 continue;
@@ -225,7 +265,7 @@ pub fn targeted_scan(ctx: &ScanCtx) -> TargetedResult {
             if stats.bytes < rule.min_size_bytes {
                 return None;
             }
-            let finding = make_finding(rule, path, stats, mtime, ctx.now);
+            let finding = make_finding(rule, path, stats, mtime, ctx);
             ctx.deliver(finding)
         })
         .collect();
@@ -275,6 +315,7 @@ fn size_pruned(path: &Path, ctx: &ScanCtx, prune: &HashSet<PathBuf>) -> SubtreeS
 struct FileRuleAcc {
     bytes: AtomicU64,
     count: AtomicU64,
+    newest_mtime: AtomicI64,
     truncated: AtomicBool,
     paths: Mutex<Vec<PathBuf>>,
 }
@@ -327,6 +368,7 @@ pub fn discovery_scan(
             FileRuleAcc {
                 bytes: AtomicU64::new(0),
                 count: AtomicU64::new(0),
+                newest_mtime: AtomicI64::new(0),
                 truncated: AtomicBool::new(false),
                 paths: Mutex::new(Vec::new()),
             },
@@ -357,6 +399,7 @@ pub fn discovery_scan(
             continue;
         }
         let bytes = acc.bytes.load(Ordering::Relaxed);
+        let newest_mtime = acc.newest_mtime.load(Ordering::Relaxed);
         let rule = &ctx.engine.rules[rule_idx];
         if bytes < rule.min_size_bytes {
             continue;
@@ -371,10 +414,10 @@ pub fn discovery_scan(
                 bytes,
                 files: count,
                 dirs: 0,
-                newest_mtime: 0,
+                newest_mtime,
             },
-            0,
-            ctx.now,
+            newest_mtime,
+            ctx,
         );
         if acc.truncated.load(Ordering::Relaxed) {
             finding.report_only = true;
@@ -420,14 +463,22 @@ fn walk_discover(
             push_builtin_finding(
                 state,
                 "cachedir-tag",
-                "tool-cache",
+                "tagged-cache",
                 dir.to_path_buf(),
                 stats,
                 ctx.now,
                 Safety::Review,
                 false,
-                false,
-                Some("directory is tagged CACHEDIR.TAG (regenerable cache)"),
+                true,
+                Some(
+                    "The directory contains a valid CACHEDIR.TAG. This marks data that should not need backup, but it does not identify the owner or guarantee that raw deletion is the correct cleanup method.",
+                ),
+                Some(
+                    "The owner may need to rebuild or redownload the contents. Some tools also place this tag in persistent installed environments.",
+                ),
+                Some(
+                    "Review the full path and identify the owning tool. Prefer its native prune or uninstall command; this finding is never bulk-selected.",
+                ),
             );
         }
         return;
@@ -435,8 +486,17 @@ fn walk_discover(
 
     // Repo root? Build/extend the gitignore stack.
     let mut git_stack = git_stack;
-    let is_repo_root = entries.iter().any(|e| e.name == ".git");
+    let is_repo_root = entries.iter().any(|e| e.name == ".git")
+        || (entries.iter().any(|e| !e.is_dir && e.name == "HEAD")
+            && entries.iter().any(|e| e.is_dir && e.name == "objects")
+            && entries.iter().any(|e| e.is_dir && e.name == "refs"));
     if is_repo_root {
+        if let Some(repositories) = ctx.repositories {
+            repositories
+                .lock()
+                .expect("repositories poisoned")
+                .insert(dir.to_path_buf());
+        }
         git_stack = Some(Arc::new(GitIgnoreStack::for_repo(dir)));
     }
     if let Some(stack) = &git_stack
@@ -500,7 +560,7 @@ fn walk_discover(
                                 }
                             }
                         }
-                        let finding = make_finding(rule, child.clone(), stats, effective, ctx.now);
+                        let finding = make_finding(rule, child.clone(), stats, effective, ctx);
                         if let Some(finding) = ctx.deliver(finding) {
                             state
                                 .findings
@@ -538,7 +598,13 @@ fn walk_discover(
                         false,
                         true,
                         Some(
-                            "git-ignored data — may be source, SDKs, or databases; check before deleting",
+                            "This directory is ignored by a repository's Git rules. It could be generated output, dependencies, an SDK, a local database, or untracked user data.",
+                        ),
+                        Some(
+                            "Deleting it removes the complete ignored directory and anything stored inside it.",
+                        ),
+                        Some(
+                            "Inspect the full path and project context. Select one finding at a time only when you know the directory is reproducible.",
                         ),
                     );
                 }
@@ -551,6 +617,14 @@ fn walk_discover(
             progress_files += 1;
             let deduped = ctx.dedupe.dedup(entry.dev, entry.ino, entry.bytes);
             progress_bytes += deduped;
+            if is_reference_marker(&entry.name)
+                && let Some(reference_files) = ctx.reference_files
+            {
+                let mut reference_files = reference_files.lock().expect("references poisoned");
+                if reference_files.len() < 20_000 {
+                    reference_files.push(dir.join(&entry.name));
+                }
+            }
 
             // File tables: exact name, then suffixes, then residual globs.
             let mut matched: Option<usize> = None;
@@ -575,6 +649,9 @@ fn walk_discover(
 
             if let Some(rule_idx) = matched {
                 let rule = &ctx.engine.rules[rule_idx];
+                if deduped < rule.min_file_size_bytes {
+                    continue;
+                }
                 let full = dir.join(&entry.name);
                 let full_str = full.to_string_lossy();
                 if ctx.engine.is_protected(&full_str) {
@@ -587,6 +664,7 @@ fn walk_discover(
                 if let Some(acc) = state.file_accs.get(&rule_idx) {
                     acc.bytes.fetch_add(deduped, Ordering::Relaxed);
                     acc.count.fetch_add(1, Ordering::Relaxed);
+                    acc.newest_mtime.fetch_max(entry.mtime, Ordering::Relaxed);
                     let mut paths = acc.paths.lock().expect("paths poisoned");
                     if paths.len() < MAX_MEMBER_PATHS {
                         paths.push(full);
@@ -620,21 +698,43 @@ fn push_builtin_finding(
     safety: crate::rules::Safety,
     report_only: bool,
     manual_only: bool,
+    description: Option<&str>,
     impact: Option<&str>,
+    recommendation: Option<&str>,
 ) {
+    let category_info = category_info(category);
     let finding = Finding {
+        stable_id: format!("path:{rule_id}:{}", path.to_string_lossy()),
         rule_id: rule_id.to_string(),
         category: category.to_string(),
+        section: category_info.section,
+        subgroup: category_info.subgroup,
         safety,
+        target: FindingTarget::Filesystem { path: path.clone() },
         path,
         bytes: stats.bytes,
+        size: FindingSize::exact_physical(stats.bytes),
         files: stats.files,
         dirs: stats.dirs,
         age_days: age_days(now, stats.newest_mtime),
         recent: false,
         report_only,
+        in_use: false,
         manual_only,
+        confidence: Confidence::Medium,
+        state: if report_only {
+            FindingState::Informational
+        } else {
+            FindingState::Candidate
+        },
+        provider: None,
+        reason: String::new(),
+        evidence: Vec::new(),
+        native_action: None,
+        supersedes: Vec::new(),
+        description: description.map(str::to_owned),
         impact: impact.map(|s| s.to_string()),
+        recommendation: recommendation.map(str::to_owned),
         clean_via: Vec::new(),
         member_paths: Vec::new(),
     };
@@ -693,24 +793,58 @@ fn cachedir_tag_valid(path: &Path) -> bool {
     content.starts_with(SIGNATURE)
 }
 
+fn is_reference_marker(name: &str) -> bool {
+    matches!(
+        name,
+        "rust-toolchain.toml"
+            | "rust-toolchain"
+            | ".python-version"
+            | ".nvmrc"
+            | ".ruby-version"
+            | ".tool-versions"
+            | ".sdkmanrc"
+            | ".fvmrc"
+            | "fvm_config.json"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::rules::RuleFile;
 
     fn test_finding() -> Finding {
+        let category = category_info("test");
         Finding {
+            stable_id: "path:test:/tmp/test".into(),
             rule_id: "test".into(),
             category: "test".into(),
+            section: category.section,
+            subgroup: category.subgroup,
             safety: Safety::Safe,
+            target: FindingTarget::Filesystem {
+                path: PathBuf::from("/tmp/test"),
+            },
             path: PathBuf::from("/tmp/test"),
             bytes: 1,
+            size: FindingSize::exact_physical(1),
             files: 1,
             dirs: 0,
             age_days: None,
             recent: false,
             report_only: false,
+            in_use: false,
             manual_only: false,
+            confidence: Confidence::High,
+            state: FindingState::Candidate,
+            provider: None,
+            reason: String::new(),
+            evidence: Vec::new(),
+            native_action: None,
+            supersedes: Vec::new(),
+            description: None,
             impact: None,
+            recommendation: None,
             clean_via: Vec::new(),
             member_paths: Vec::new(),
         }
@@ -726,6 +860,9 @@ mod tests {
             engine: &engine,
             dedupe: &dedupe,
             progress: None,
+            running_commands: &[],
+            repositories: None,
+            reference_files: None,
             now: 0,
             sink: Some(&sink),
             cancel: None,
@@ -746,11 +883,109 @@ mod tests {
             engine: &engine,
             dedupe: &dedupe,
             progress: None,
+            running_commands: &[],
+            repositories: None,
+            reference_files: None,
             now: 0,
             sink: None,
             cancel: None,
         };
 
         assert_eq!(ctx.deliver(test_finding()).unwrap().rule_id, "test");
+    }
+
+    #[test]
+    fn running_process_marks_rule_manual_only() {
+        let file: RuleFile = toml::from_str(
+            r#"
+                [[rules]]
+                id = "cursor-cache"
+                category = "ide-cache"
+                safety = "safe"
+                roots = ["/tmp/cursor-cache"]
+                process_names = ["/Cursor.app/"]
+            "#,
+        )
+        .unwrap();
+        let engine = Engine::compile(file.rules, &[], None).unwrap();
+        let dedupe = InodeDedupe::new();
+        let running = vec!["/Applications/Cursor.app/Contents/MacOS/Cursor".to_lowercase()];
+        let ctx = ScanCtx {
+            engine: &engine,
+            dedupe: &dedupe,
+            progress: None,
+            running_commands: &running,
+            repositories: None,
+            reference_files: None,
+            now: 0,
+            sink: None,
+            cancel: None,
+        };
+        let finding = make_finding(
+            &engine.rules[0],
+            PathBuf::from("/tmp/cursor-cache"),
+            SubtreeStats::default(),
+            0,
+            &ctx,
+        );
+
+        assert!(finding.in_use);
+        assert!(finding.manual_only);
+    }
+
+    #[test]
+    fn compiles_per_file_size_floor() {
+        let file: RuleFile = toml::from_str(
+            r#"
+                [[rules]]
+                id = "large-dumps"
+                category = "diagnostic"
+                safety = "review"
+                file_suffixes = [".hprof"]
+                min_file_size = "10MB"
+            "#,
+        )
+        .unwrap();
+        let engine = Engine::compile(file.rules, &[], None).unwrap();
+        assert_eq!(engine.rules[0].min_file_size_bytes, 10 << 20);
+    }
+
+    #[test]
+    fn targeted_directory_only_roots_skip_files() {
+        let root = std::env::temp_dir().join("hokori-directory-only-test");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("tool")).unwrap();
+        std::fs::write(root.join(".lock"), b"lock").unwrap();
+
+        let file: RuleFile = toml::from_str(&format!(
+            r#"
+                [[rules]]
+                id = "installed-tools"
+                category = "tools"
+                safety = "risky"
+                roots = ["{}/*"]
+                directory_only = true
+            "#,
+            root.display()
+        ))
+        .unwrap();
+        let engine = Engine::compile(file.rules, &[], None).unwrap();
+        let dedupe = InodeDedupe::new();
+        let ctx = ScanCtx {
+            engine: &engine,
+            dedupe: &dedupe,
+            progress: None,
+            running_commands: &[],
+            repositories: None,
+            reference_files: None,
+            now: 0,
+            sink: None,
+            cancel: None,
+        };
+        let result = targeted_scan(&ctx);
+
+        assert_eq!(result.findings.len(), 1);
+        assert_eq!(result.findings[0].path, root.join("tool"));
+        let _ = std::fs::remove_dir_all(root);
     }
 }

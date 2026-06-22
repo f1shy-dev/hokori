@@ -10,3 +10,20 @@ pub fn home_dir() -> Option<PathBuf> {
     }
     None
 }
+
+pub fn running_commands() -> Vec<String> {
+    let Ok(output) = std::process::Command::new("ps")
+        .args(["-axo", "command="])
+        .output()
+    else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(|line| line.trim().to_lowercase())
+        .filter(|line| !line.is_empty())
+        .collect()
+}

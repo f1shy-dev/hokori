@@ -2,8 +2,10 @@ mod action;
 mod compiler;
 mod engine;
 mod gitignore;
+mod providers;
 mod report;
 mod rules;
+mod taxonomy;
 mod tui;
 mod util;
 mod walk;
@@ -11,14 +13,20 @@ mod walk;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::collections::HashSet;
-use std::io::IsTerminal;
+use std::io::{IsTerminal, stdin, stdout};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use crate::action::{ExecOptions, PlanOptions, SafetyArg};
 use crate::compiler::Engine;
 use crate::engine::{ScanCtx, discovery_scan, targeted_scan};
+use crate::providers::command::CommandRunner;
+use crate::providers::{
+    DEEP_SCAN_BUDGET, ProviderContext, ProviderRegistry, ProviderSettings, ProviderState,
+    ProviderStatus, QUICK_SCAN_BUDGET, ScanProfile,
+};
 use crate::report::{Progress, ProgressReporter, Report};
 use crate::walk::InodeDedupe;
 
@@ -26,7 +34,7 @@ use crate::walk::InodeDedupe;
 #[command(
     author,
     version,
-    about = "Disk cleaner: targeted + discovery scanning, dry-run by default"
+    about = "Hokori: a cautious, TUI-first macOS disk cleaner"
 )]
 struct Args {
     #[command(subcommand)]
@@ -65,6 +73,26 @@ struct ScanArgs {
     /// Emit the full report as JSON on stdout.
     #[arg(long)]
     json: bool,
+
+    /// Run slower state-aware provider checks, including optional network verification.
+    #[arg(long)]
+    deep: bool,
+
+    /// Skip native state-aware providers.
+    #[arg(long)]
+    no_providers: bool,
+
+    /// Run only the named native providers. Repeat to select several.
+    #[arg(long = "provider", value_name = "ID")]
+    providers: Vec<String>,
+
+    /// Minimum age for provider-managed stale objects.
+    #[arg(long, value_name = "DAYS", default_value_t = 30)]
+    provider_min_age: u64,
+
+    /// Minimum reclaimable provider object size.
+    #[arg(long, value_name = "SIZE", default_value = "1MB")]
+    provider_min_size: String,
 }
 
 #[derive(Subcommand, Debug)]
@@ -129,7 +157,10 @@ struct CleanArgs {
 fn main() -> Result<()> {
     let args = Args::parse();
     match args.command {
-        None => cmd_scan(args.scan),
+        None if args.scan.json || !stdin().is_terminal() || !stdout().is_terminal() => {
+            cmd_scan(args.scan)
+        }
+        None => cmd_tui(args.scan),
         Some(Command::Scan(scan)) => cmd_scan(scan),
         Some(Command::Clean(clean)) => cmd_clean(clean),
         Some(Command::Tui(scan)) => cmd_tui(scan),
@@ -164,13 +195,37 @@ fn resolve_roots(scan: &ScanArgs) -> Result<Vec<PathBuf>> {
     }
 }
 
-fn run_scan(scan: &ScanArgs) -> Result<(Report, Engine)> {
+struct ScanRun {
+    report: Report,
+    engine: Engine,
+    providers: Arc<ProviderRegistry>,
+    provider_context: Arc<ProviderContext>,
+}
+
+fn provider_settings(scan: &ScanArgs) -> Result<ProviderSettings> {
+    Ok(ProviderSettings {
+        profile: if scan.deep {
+            ScanProfile::Deep
+        } else {
+            ScanProfile::Quick
+        },
+        min_age_days: scan.provider_min_age,
+        min_size_bytes: rules::parse_size(&scan.provider_min_size)
+            .context("invalid --provider-min-size")?,
+        enabled: (!scan.providers.is_empty()).then(|| scan.providers.clone()),
+    })
+}
+
+fn run_scan(scan: &ScanArgs) -> Result<ScanRun> {
     init_threads(scan.threads);
     let engine = build_engine(scan)?;
     let home = util::home_dir();
     let roots = resolve_roots(scan)?;
 
     let dedupe = InodeDedupe::new();
+    let running_commands = util::running_commands();
+    let repositories = Mutex::new(HashSet::new());
+    let reference_files = Mutex::new(Vec::new());
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
@@ -190,6 +245,9 @@ fn run_scan(scan: &ScanArgs) -> Result<(Report, Engine)> {
             engine: &engine,
             dedupe: &dedupe,
             progress: progress.as_deref(),
+            running_commands: &running_commands,
+            repositories: Some(&repositories),
+            reference_files: Some(&reference_files),
             now,
             sink: None,
             cancel: None,
@@ -210,6 +268,9 @@ fn run_scan(scan: &ScanArgs) -> Result<(Report, Engine)> {
             engine: &engine,
             dedupe: &dedupe,
             progress: progress.as_deref(),
+            running_commands: &running_commands,
+            repositories: Some(&repositories),
+            reference_files: Some(&reference_files),
             now,
             sink: None,
             cancel: None,
@@ -218,6 +279,84 @@ fn run_scan(scan: &ScanArgs) -> Result<(Report, Engine)> {
         if let Some(reporter) = reporter {
             reporter.stop();
         }
+    }
+
+    let providers = Arc::new(if scan.no_providers {
+        ProviderRegistry::empty()
+    } else {
+        ProviderRegistry::standard()
+    });
+    let provider_context = Arc::new(ProviderContext {
+        home: home.clone(),
+        roots: roots.clone(),
+        repositories: repositories
+            .into_inner()
+            .expect("repositories poisoned")
+            .into_iter()
+            .collect(),
+        reference_files: reference_files.into_inner().expect("references poisoned"),
+        reference_complete: !scan.no_discovery
+            && home
+                .as_ref()
+                .is_some_and(|home| roots.iter().any(|root| root == home)),
+        running_commands: running_commands.clone(),
+        settings: provider_settings(scan)?,
+        runner: Arc::new(CommandRunner::new(home.clone())),
+        cancel: Arc::new(AtomicBool::new(false)),
+        deadline: Instant::now()
+            + if scan.deep {
+                DEEP_SCAN_BUDGET
+            } else {
+                QUICK_SCAN_BUDGET
+            },
+    });
+    let provider_findings = Mutex::new(Vec::new());
+    let provider_statuses = Mutex::new(
+        providers
+            .statuses_for(&provider_context.settings)
+            .into_iter()
+            .map(|status| (status.provider_id.clone(), status))
+            .collect::<std::collections::HashMap<_, _>>(),
+    );
+    providers.scan_all(
+        Arc::clone(&provider_context),
+        &|status| {
+            provider_statuses
+                .lock()
+                .expect("provider statuses poisoned")
+                .insert(status.provider_id.clone(), status);
+        },
+        &|finding| {
+            provider_findings
+                .lock()
+                .expect("provider findings poisoned")
+                .push(finding);
+        },
+    );
+    let mut statuses: Vec<ProviderStatus> = provider_statuses
+        .into_inner()
+        .expect("provider statuses poisoned")
+        .into_values()
+        .collect();
+    statuses.sort_by(|left, right| left.name.cmp(&right.name));
+    for status in &statuses {
+        if status.state == ProviderState::Ready
+            && let Some(provider) = providers.provider(&status.provider_id)
+        {
+            let metadata = provider.metadata();
+            findings.retain(|finding| {
+                !metadata
+                    .supersedes_rules
+                    .iter()
+                    .any(|rule_id| *rule_id == finding.rule_id)
+            });
+        }
+    }
+    for finding in provider_findings
+        .into_inner()
+        .expect("provider findings poisoned")
+    {
+        report::merge_finding(&mut findings, finding);
     }
 
     let (scanned_files, scanned_dirs, _) =
@@ -230,17 +369,24 @@ fn run_scan(scan: &ScanArgs) -> Result<(Report, Engine)> {
             .collect(),
         totals: Report::compute_totals(&findings),
         findings,
+        providers: statuses,
         scanned_files,
         scanned_dirs,
         elapsed_ms: started.elapsed().as_millis(),
     };
-    Ok((report, engine))
+    Ok(ScanRun {
+        report,
+        engine,
+        providers,
+        provider_context,
+    })
 }
 
 fn cmd_scan(scan: ScanArgs) -> Result<()> {
     let json = scan.json;
     let verbose = scan.verbose;
-    let (report, _engine) = run_scan(&scan)?;
+    let run = run_scan(&scan)?;
+    let report = run.report;
     if json {
         serde_json::to_writer_pretty(std::io::stdout().lock(), &report)?;
         println!();
@@ -251,7 +397,8 @@ fn cmd_scan(scan: ScanArgs) -> Result<()> {
 }
 
 fn cmd_clean(clean: CleanArgs) -> Result<()> {
-    let (report, engine) = run_scan(&clean.scan)?;
+    let run = run_scan(&clean.scan)?;
+    let report = run.report;
     let options = PlanOptions {
         safety: clean.safety,
         categories: clean.categories,
@@ -274,7 +421,9 @@ fn cmd_clean(clean: CleanArgs) -> Result<()> {
         action::confirm_or_bail(&plan, clean.yes)?;
         let summary = action::execute_plan(
             &plan,
-            &engine,
+            &run.engine,
+            &run.providers,
+            &run.provider_context.for_action(),
             home.as_deref(),
             &ExecOptions {
                 permanently: clean.permanently,
@@ -283,10 +432,15 @@ fn cmd_clean(clean: CleanArgs) -> Result<()> {
         for err in &summary.errors {
             eprintln!("  skip {err}");
         }
+        for message in &summary.messages {
+            println!("  {message}");
+        }
         println!(
-            "Freed {} ({} items deleted, {} skipped/failed). Journal: ~/.local/state/cleaner/journal.jsonl",
+            "Freed {} ({} items deleted, {} changed, {} blocked, {} failed). Journal: ~/.local/state/hokori/journal.jsonl",
             report::human_bytes(summary.freed_bytes),
             summary.deleted,
+            summary.changed,
+            summary.skipped,
             summary.failed
         );
     }
@@ -297,7 +451,29 @@ fn cmd_tui(scan: ScanArgs) -> Result<()> {
     init_threads(scan.threads);
     let engine = std::sync::Arc::new(build_engine(&scan)?);
     let roots = resolve_roots(&scan)?;
-    tui::run(engine, roots, scan, util::home_dir())
+    validate_tui_roots(&roots, scan.no_discovery)?;
+    let providers = Arc::new(if scan.no_providers {
+        ProviderRegistry::empty()
+    } else {
+        ProviderRegistry::standard()
+    });
+    let settings = provider_settings(&scan)?;
+    tui::run(engine, providers, settings, roots, scan, util::home_dir())
+}
+
+fn validate_tui_roots(roots: &[PathBuf], no_discovery: bool) -> Result<()> {
+    if no_discovery {
+        return Ok(());
+    }
+    for root in roots {
+        if !root.exists() {
+            anyhow::bail!("scan root does not exist: {}", root.display());
+        }
+        if !root.is_dir() {
+            anyhow::bail!("scan root is not a directory: {}", root.display());
+        }
+    }
+    Ok(())
 }
 
 fn cmd_rules(json: bool, rules_dir: Option<&std::path::Path>) -> Result<()> {
@@ -310,6 +486,8 @@ fn cmd_rules(json: bool, rules_dir: Option<&std::path::Path>) -> Result<()> {
             safety: &'a str,
             targeted: bool,
             report_only: bool,
+            manual_only: bool,
+            process_guarded: bool,
         }
         let summaries: Vec<_> = defs
             .iter()
@@ -319,6 +497,8 @@ fn cmd_rules(json: bool, rules_dir: Option<&std::path::Path>) -> Result<()> {
                 safety: d.safety.label(),
                 targeted: !d.roots.is_empty(),
                 report_only: d.report_only,
+                manual_only: d.manual_only,
+                process_guarded: !d.process_names.is_empty(),
             })
             .collect();
         serde_json::to_writer_pretty(std::io::stdout().lock(), &summaries)?;

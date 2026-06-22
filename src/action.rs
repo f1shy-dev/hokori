@@ -3,7 +3,7 @@
 //! confirmation — execute it through a single validation funnel.
 //!
 //! Every deletion goes to the OS Trash unless `--permanently` is passed, and
-//! every attempt is journaled to ~/.local/state/cleaner/journal.jsonl first.
+//! every attempt is journaled to ~/.local/state/hokori/journal.jsonl first.
 
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
@@ -11,7 +11,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::compiler::Engine;
-use crate::report::{Finding, display_path, human_bytes};
+use crate::providers::{ProviderContext, ProviderExecutionOptions, ProviderRegistry, Revalidation};
+use crate::report::{Evidence, Finding, display_path, human_bytes};
 use crate::rules::Safety;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -108,13 +109,22 @@ pub fn print_plan(items: &[&Finding], home: Option<&Path>, apply: bool) {
             human_bytes(finding.bytes),
             finding.rule_id,
             finding.safety.label(),
-            display_path(&finding.path, home),
+            finding.display_label(home),
             count
         );
-        if !finding.clean_via.is_empty() {
+        if let Some(action) = finding.action_preview() {
             println!(
-                "             prefer tool-native cleanup: {}",
-                finding.clean_via.join(" ")
+                "             action: {}{}",
+                action,
+                if finding
+                    .native_action
+                    .as_ref()
+                    .is_some_and(|action| action.irreversible)
+                {
+                    " (not restorable from Trash)"
+                } else {
+                    ""
+                }
             );
         }
         if let Some(impact) = &finding.impact {
@@ -130,13 +140,18 @@ pub fn print_plan(items: &[&Finding], home: Option<&Path>, apply: bool) {
 // ---- execution ----
 
 #[derive(Serialize)]
-struct JournalEntry<'a> {
+struct JournalEntry {
     ts: u64,
-    path: &'a str,
-    bytes: u64,
-    rule_id: &'a str,
-    mode: &'a str,
-    result: &'a str,
+    target: String,
+    estimated_bytes: u64,
+    freed_bytes: u64,
+    rule_id: String,
+    provider: Option<String>,
+    object_id: Option<String>,
+    action: Option<String>,
+    evidence: Vec<Evidence>,
+    mode: String,
+    result: String,
 }
 
 pub struct ExecOptions {
@@ -147,13 +162,18 @@ pub struct ExecOptions {
 pub struct ExecSummary {
     pub deleted: u64,
     pub failed: usize,
+    pub changed: usize,
+    pub skipped: usize,
     pub freed_bytes: u64,
     pub errors: Vec<String>,
+    pub messages: Vec<String>,
 }
 
 pub fn execute_plan(
     items: &[&Finding],
     engine: &Engine,
+    providers: &ProviderRegistry,
+    provider_context: &ProviderContext,
     home: Option<&Path>,
     options: &ExecOptions,
 ) -> Result<ExecSummary> {
@@ -167,6 +187,61 @@ pub fn execute_plan(
 
     let mut summary = ExecSummary::default();
     for finding in items {
+        if finding.is_provider_owned() {
+            let revalidation = providers.revalidate(provider_context, finding);
+            match revalidation {
+                Ok(Revalidation::Valid) => {}
+                Ok(Revalidation::Changed(message) | Revalidation::Gone(message)) => {
+                    summary.changed += 1;
+                    summary.failed += 1;
+                    push_error(&mut summary, message);
+                    journal_provider(&mut journal, finding, "provider-native", "changed", 0);
+                    continue;
+                }
+                Ok(Revalidation::Blocked(message)) => {
+                    summary.skipped += 1;
+                    summary.failed += 1;
+                    push_error(&mut summary, message);
+                    journal_provider(&mut journal, finding, "provider-native", "blocked", 0);
+                    continue;
+                }
+                Err(error) => {
+                    summary.failed += 1;
+                    push_error(&mut summary, format!("{error:#}"));
+                    journal_provider(&mut journal, finding, "provider-native", "error", 0);
+                    continue;
+                }
+            }
+            match providers.execute(
+                provider_context,
+                finding,
+                ProviderExecutionOptions {
+                    permanently: options.permanently,
+                },
+            ) {
+                Ok(execution) => {
+                    summary.deleted += execution.deleted;
+                    summary.freed_bytes += execution.freed_bytes;
+                    if !execution.message.is_empty() && summary.messages.len() < 20 {
+                        summary.messages.push(execution.message);
+                    }
+                    journal_provider(
+                        &mut journal,
+                        finding,
+                        "provider-native",
+                        "ok",
+                        execution.freed_bytes,
+                    );
+                }
+                Err(error) => {
+                    summary.failed += 1;
+                    push_error(&mut summary, format!("{error:#}"));
+                    journal_provider(&mut journal, finding, "provider-native", "error", 0);
+                }
+            }
+            continue;
+        }
+
         let targets: Vec<&PathBuf> = if finding.member_paths.is_empty() {
             vec![&finding.path]
         } else {
@@ -174,6 +249,11 @@ pub fn execute_plan(
         };
         let mut finding_failed = false;
         for target in targets {
+            let estimated_bytes = if finding.member_paths.is_empty() {
+                finding.bytes
+            } else {
+                allocated_file_bytes(target)
+            };
             let result = validate_for_deletion(target, engine, home)
                 .and_then(|()| delete_one(target, options.permanently))
                 // Some deletions (notably .DS_Store) report an error yet still
@@ -199,11 +279,16 @@ pub fn execute_plan(
                 &mut journal,
                 JournalEntry {
                     ts: now_secs(),
-                    path: &target.to_string_lossy(),
-                    bytes: finding.bytes,
-                    rule_id: &finding.rule_id,
-                    mode,
-                    result: outcome,
+                    target: target.to_string_lossy().into_owned(),
+                    estimated_bytes,
+                    freed_bytes: if result.is_ok() { estimated_bytes } else { 0 },
+                    rule_id: finding.rule_id.clone(),
+                    provider: None,
+                    object_id: None,
+                    action: None,
+                    evidence: redact_evidence(&finding.evidence),
+                    mode: mode.into(),
+                    result: outcome.into(),
                 },
             );
             if let Err(err) = result {
@@ -220,6 +305,83 @@ pub fn execute_plan(
         }
     }
     Ok(summary)
+}
+
+fn journal_provider(
+    journal: &mut std::fs::File,
+    finding: &Finding,
+    mode: &str,
+    result: &str,
+    freed_bytes: u64,
+) {
+    let action = finding.native_action.as_ref();
+    write_journal(
+        journal,
+        JournalEntry {
+            ts: now_secs(),
+            target: finding.display_label(None),
+            estimated_bytes: finding.bytes,
+            freed_bytes,
+            rule_id: finding.rule_id.clone(),
+            provider: finding
+                .provider
+                .as_ref()
+                .map(|provider| provider.id.clone()),
+            object_id: action.map(|action| action.object_id.clone()),
+            action: action.map(|action| action.action_id.clone()),
+            evidence: redact_evidence(&finding.evidence),
+            mode: mode.into(),
+            result: result.into(),
+        },
+    );
+}
+
+fn allocated_file_bytes(path: &Path) -> u64 {
+    let Ok(metadata) = path.symlink_metadata() else {
+        return 0;
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        metadata.blocks().saturating_mul(512)
+    }
+    #[cfg(not(unix))]
+    {
+        metadata.len()
+    }
+}
+
+fn redact_evidence(evidence: &[Evidence]) -> Vec<Evidence> {
+    evidence
+        .iter()
+        .map(|entry| {
+            let label = entry.label.to_ascii_lowercase();
+            let sensitive = [
+                "token",
+                "password",
+                "secret",
+                "cookie",
+                "credential",
+                "auth",
+            ]
+            .iter()
+            .any(|term| label.contains(term));
+            Evidence {
+                label: entry.label.clone(),
+                value: if sensitive {
+                    "[redacted]".into()
+                } else {
+                    entry.value.clone()
+                },
+            }
+        })
+        .collect()
+}
+
+fn push_error(summary: &mut ExecSummary, error: String) {
+    if summary.errors.len() < 20 {
+        summary.errors.push(error);
+    }
 }
 
 /// The single validation funnel. Every deletion passes through here; rules
@@ -303,13 +465,32 @@ fn trash_to_bin(path: &Path) -> Result<()> {
 }
 
 fn open_journal(home: &Path) -> Result<std::fs::File> {
-    let dir = home.join(".local/state/cleaner");
+    let dir = home.join(".local/state/hokori");
     std::fs::create_dir_all(&dir).context("failed to create journal dir")?;
-    std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))
+            .context("failed to secure journal dir")?;
+    }
+
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let file = options
         .open(dir.join("journal.jsonl"))
-        .context("failed to open journal")
+        .context("failed to open journal")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))
+            .context("failed to secure journal")?;
+    }
+    Ok(file)
 }
 
 fn write_journal(file: &mut std::fs::File, entry: JournalEntry) {
@@ -334,14 +515,14 @@ pub fn confirm_or_bail(items: &[&Finding], yes: bool) -> Result<()> {
     }
     let total: u64 = items.iter().map(|f| f.bytes).sum();
     eprint!(
-        "\nType 'delete' to move {} across {} items to the Trash: ",
+        "\nType 'clean' to execute cleanup for {} across {} items. Native actions may be irreversible: ",
         human_bytes(total),
         items.len()
     );
     std::io::stderr().flush().ok();
     let mut input = String::new();
     std::io::stdin().read_line(&mut input)?;
-    if input.trim() != "delete" {
+    if input.trim() != "clean" {
         bail!("aborted");
     }
     Ok(())

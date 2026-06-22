@@ -1,43 +1,72 @@
-# Scan Architecture (Prototype)
+# Scan Architecture
 
-## Goals
-- Fast traversal with low memory use.
-- Classify candidates by rule families (cache/log/temp/build/etc).
-- Avoid destructive matches by default; deep-clean requires explicit opt-in.
-- Optional git-ignore cleanup that skips sensitive dotfiles.
+## Product Model
 
-## Pipeline
-1. **Load rules** from `rules/rulesets.toml` (e.g., `macos` ruleset with includes).
-2. **Compile globsets** per rule (case-insensitive on macOS/Windows).
-3. **Walk roots in parallel** using `ignore::WalkBuilder`:
-   - Do not honor gitignore or hidden filters (we need full visibility).
-   - Skip `.git` dirs to avoid expensive, non-junk data.
-4. **Match each entry** against compiled rules and record:
-   - File count + size (bytes) per rule.
-   - Directory match counts (size aggregated from files, not dirs).
-   - Limited sample paths for quick inspection.
+The TUI is the primary interface. Findings are grouped into Quick Cleanup,
+Developer, Applications, System, and Analysis. Developer findings are further
+grouped into Packages, Containers & VMs, Apple & Mobile, Repositories,
+Toolchains, AI Assets, IDEs, and Project Artifacts.
 
-## Git-ignored cleanup (inline)
-- Detect repo roots during traversal by locating `.git` (dir or file).
-- Parse gitignore rules on the fly while scanning:
-  - `.gitignore` files per directory
-  - `.git/info/exclude`
-  - global excludes from user config
-- Apply a hard-coded protect list (`.env*`, `.npmrc`, `.ssh`, `.aws`, etc) and optional user-supplied protect patterns.
-- Two modes:
-  - `size` (default): traverse ignored dirs to size accurately
-  - `prune`: skip ignored dirs (faster, undercounts when whitelists exist)
+A finding has a typed target:
 
-## Safety model
-- Rules are tagged with `cleanable`, `caution`, `deep_clean`, or `protect`.
-- `protect` outranks everything else, but is scoped to *roots only* for containers/app support.
-- “User data” stores (IndexedDB/LocalStorage/etc) are marked `deep_clean` and should require explicit user confirmation.
+- one filesystem path;
+- a bounded group of filesystem paths;
+- a native provider object;
+- a report-only diagnostic.
 
-## Next performance steps
-- Add Windows file-id dedupe (requires per-file handle) if hardlink accuracy matters there.
-- Optional size-cache for repeated scans and UI responsiveness.
+It also carries stable identity, owner, reason, evidence, confidence, state,
+logical/physical/unique/shared/reclaimable size, size accuracy, safety, and an
+optional typed native action.
 
-## Platform backends (fast path only)
-- macOS: `getattrlistbulk` + inode dedupe (fileid) with parallel descent.
-- Linux: `getdents64` + `statx` (fallback `fstatat`) with `(dev, ino)` dedupe.
-- Windows: `FindFirstFileExW` (large fetch) + `WIN32_FIND_DATAW` traversal; optional hardlink dedupe via `--windows-dedupe-hardlinks`.
+## Filesystem Pipeline
+
+1. Load and compile embedded or user-supplied rules.
+2. Expand targeted known locations and size only those paths.
+3. Walk requested roots once for project artifacts, exact files, suffixes,
+   residual globs, Git repositories, Git-ignored directories, and CACHEDIR.TAG.
+4. Deduplicate hard links with a bounded sharded inode set.
+5. Stream findings through a bounded queue. Batch mode retains findings; TUI
+   mode transfers ownership to the queue without a duplicate scanner copy.
+
+The macOS walker uses `getattrlistbulk`; portable platforms use bounded
+`std::fs` traversal. Nested mounts, cloud-storage roots, `.git`, Trash, and
+other unsuitable domains are skipped.
+
+## Provider Pipeline
+
+1. Build the repository set discovered by the filesystem pass.
+2. Select providers for the quick/deep profile and optional provider filter.
+3. Run at most three providers concurrently under a shared deadline.
+4. Probe without starting applications or daemons.
+5. Execute only statically declared read-only commands through the bounded
+   command runner.
+6. Normalize output immediately into findings and discard raw output.
+7. Supersede overlapping static rules when an authoritative provider finishes.
+8. Stream provider state and findings into the TUI.
+
+Provider actions are not arbitrary command strings. The provider dispatches a
+typed action ID, validates every dynamic argument, rechecks current references,
+and then calls an allowlisted native command or a strictly rooted Trash action.
+
+## Memory Bounds
+
+- TUI event queue: 1,024 events.
+- Retained aggregate member paths: 50,000 maximum.
+- Provider workers: three.
+- Parsed provider objects: bounded per provider.
+- Child stdout/stderr and line lengths: bounded.
+- Old scan state is dropped on rescan rather than appended.
+- Provider-only cleanup refreshes only affected providers.
+- Cancellation kills and reaps process groups.
+
+Regression coverage focuses on bounded queues and retained collections,
+repeated scan-state replacement, subprocess output limits, cancellation, and
+child-process reaping.
+
+## Deletion
+
+Filesystem paths pass through one validation funnel and move to Trash by
+default. Native provider findings are revalidated and dispatched to the owning
+provider. Duplicate groups require choosing a retained copy. Native and
+high-impact actions require stronger TUI confirmation. Every attempt is written
+to the JSONL journal with redacted evidence and actual reported freed bytes.

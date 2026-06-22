@@ -1,0 +1,510 @@
+# Developer and tool caches outside ordinary project build directories.
+# Native cleanup commands are preferred where the tool publishes one.
+
+[[rules]]
+id = "uv-installed-tools"
+category = "installed-tools"
+safety = "risky"
+description = "Persistent virtual environments created by `uv tool install`. These are installed commands, not uv's disposable dependency cache."
+impact = "Deleting an environment manually makes its installed command fail and can leave a broken launcher in ~/.local/bin."
+recommendation = "Do not delete this as cache. Remove the named tool with `uv tool uninstall <tool>`."
+roots = ["~/.local/share/uv/tools/*"]
+directory_only = true
+clean_via = ["uv", "tool", "uninstall", "<tool>"]
+report_only = true
+
+[[rules]]
+id = "pipx-run-cache"
+category = "tool-cache"
+safety = "safe"
+description = "Disposable virtual environments created by `pipx run` for commands that are executed without permanent installation."
+impact = "The next matching `pipx run` invocation recreates the environment and redownloads packages."
+recommendation = "Safe when no `pipx run` command is active."
+roots = ["~/.local/pipx/.cache", "~/.cache/pipx"]
+process_names = ["pipx run", "/.local/pipx/.cache/"]
+
+[[rules]]
+id = "pipx-python-cache"
+category = "toolchain-cache"
+safety = "review"
+description = "Standalone Python distributions downloaded by pipx for environments that need a Python interpreter."
+impact = "pipx may redownload Python before creating or running environments."
+recommendation = "Review before cleaning, especially if the required Python version is no longer otherwise installed."
+roots = ["~/.local/pipx/py"]
+manual_only = true
+
+[[rules]]
+id = "pip-cache"
+category = "package-manager-cache"
+safety = "safe"
+description = "Downloaded Python wheels, source archives, and HTTP responses retained by pip."
+impact = "Python packages and wheels are downloaded or rebuilt again"
+recommendation = "Safe to prune. Prefer `pip cache purge` so pip manages its own cache layout."
+roots = ["~/.cache/pip", "~/Library/Caches/pip"]
+clean_via = ["pip", "cache", "purge"]
+
+[[rules]]
+id = "uv-cache"
+category = "package-manager-cache"
+safety = "safe"
+description = "uv's disposable dependency and temporary tool-execution cache."
+impact = "unused Python package artifacts are downloaded or rebuilt again"
+recommendation = "Safe to prune with `uv cache prune`. This is different from persistent `uv tool install` environments."
+roots = ["~/.cache/uv"]
+clean_via = ["uv", "cache", "prune"]
+
+[[rules]]
+id = "poetry-cache"
+category = "package-manager-cache"
+safety = "safe"
+impact = "Poetry downloads package artifacts again"
+roots = ["~/.cache/pypoetry", "~/Library/Caches/pypoetry"]
+
+[[rules]]
+id = "corepack-cache"
+category = "package-manager-cache"
+safety = "safe"
+impact = "Corepack downloads package-manager releases again"
+roots = ["~/.cache/node/corepack"]
+clean_via = ["corepack", "cache", "clean"]
+
+[[rules]]
+id = "npm-residuals"
+category = "package-manager-cache"
+safety = "safe"
+impact = "npx packages, prebuilds, and debug logs are recreated on demand"
+roots = ["~/.npm/_npx", "~/.npm/_logs", "~/.npm/_prebuilds"]
+
+[[rules]]
+id = "yarn-classic-cache"
+category = "package-manager-cache"
+safety = "safe"
+impact = "Yarn downloads packages again"
+roots = ["~/Library/Caches/Yarn", "~/.cache/yarn"]
+clean_via = ["yarn", "cache", "clean"]
+
+[[rules]]
+id = "cocoapods-cache"
+category = "package-manager-cache"
+safety = "review"
+impact = "Pods are downloaded again on the next install"
+roots = ["~/Library/Caches/CocoaPods"]
+clean_via = ["pod", "cache", "clean", "--all"]
+min_age_days = 14
+
+[[rules]]
+id = "carthage-cache"
+category = "package-manager-cache"
+safety = "review"
+impact = "Carthage dependencies are downloaded or rebuilt again"
+roots = ["~/Library/Caches/org.carthage.CarthageKit"]
+min_age_days = 14
+
+[[rules]]
+id = "go-build-cache"
+category = "compiler-cache"
+safety = "safe"
+description = "Compiled Go package and test-result cache returned by `go env GOCACHE` on macOS."
+impact = "Go recompiles packages and test results"
+recommendation = "Safe to remove when Go builds are idle. Prefer `go clean -cache -testcache`."
+roots = ["~/Library/Caches/go-build"]
+clean_via = ["go", "clean", "-cache", "-testcache"]
+
+[[rules]]
+id = "deno-cache"
+category = "package-manager-cache"
+safety = "safe"
+impact = "Deno downloads and recompiles dependencies again"
+roots = ["~/Library/Caches/deno", "~/.cache/deno"]
+
+[[rules]]
+id = "composer-cache"
+category = "package-manager-cache"
+safety = "safe"
+impact = "Composer downloads package archives and repository metadata again"
+roots = ["~/.composer/cache", "~/Library/Caches/composer"]
+clean_via = ["composer", "clear-cache"]
+
+[[rules]]
+id = "rubygems-cache"
+category = "package-manager-cache"
+safety = "review"
+impact = "RubyGems downloads gem archives again"
+roots = ["~/.gem/cache"]
+min_age_days = 30
+
+[[rules]]
+id = "nuget-cache"
+category = "package-manager-cache"
+safety = "review"
+impact = "NuGet restores global packages and local caches again"
+roots = ["~/.nuget/packages", "~/Library/Caches/NuGet"]
+clean_via = ["dotnet", "nuget", "locals", "all", "--clear"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "conda-package-cache"
+category = "package-manager-cache"
+safety = "risky"
+impact = "direct removal can break environments that symlink into the package cache; prefer the native command"
+roots = [
+  "~/.conda/pkgs",
+  "~/anaconda3/pkgs",
+  "~/miniconda3/pkgs",
+  "~/miniforge3/pkgs",
+  "~/mambaforge/pkgs",
+]
+clean_via = ["conda", "clean", "--all", "--yes"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "pre-commit-cache"
+category = "tool-cache"
+safety = "review"
+impact = "pre-commit recreates hook environments on the next run"
+roots = ["~/.cache/pre-commit"]
+min_age_days = 30
+
+[[rules]]
+id = "ccache-cache"
+category = "compiler-cache"
+safety = "safe"
+impact = "C/C++ compilation loses cached objects and becomes slower temporarily"
+roots = ["~/.ccache", "~/.cache/ccache"]
+
+[[rules]]
+id = "fontconfig-cache"
+category = "system-cache"
+safety = "safe"
+description = "Fontconfig's index of installed fonts, used by command-line and cross-platform applications to find fonts quickly."
+impact = "Applications using fontconfig rescan installed fonts and rebuild the index."
+recommendation = "Safe to remove. Prefer `fc-cache -r` when available."
+roots = ["~/.cache/fontconfig"]
+clean_via = ["fc-cache", "-r"]
+
+[[rules]]
+id = "sccache-cache"
+category = "compiler-cache"
+safety = "safe"
+impact = "compiled objects are rebuilt instead of restored from sccache"
+roots = ["~/.cache/sccache"]
+
+[[rules]]
+id = "bazel-cache"
+category = "compiler-cache"
+safety = "review"
+impact = "Bazel rebuilds and redownloads cached artifacts"
+roots = ["~/.cache/bazel"]
+min_age_days = 30
+
+[[rules]]
+id = "selenium-cache"
+category = "tool-cache"
+safety = "safe"
+impact = "Selenium Manager downloads browser drivers again"
+roots = ["~/.cache/selenium"]
+
+[[rules]]
+id = "rustup-download-cache"
+category = "toolchain-cache"
+safety = "safe"
+impact = "rustup downloads toolchain archives again if needed"
+roots = ["~/.rustup/downloads", "~/.rustup/tmp"]
+
+[[rules]]
+id = "cargo-git-cache"
+category = "package-manager-cache"
+safety = "review"
+impact = "Cargo clones git dependencies again"
+roots = ["~/.cargo/git/checkouts", "~/.cargo/git/db"]
+min_age_days = 30
+
+[[rules]]
+id = "flutter-engine-cache"
+category = "toolchain-cache"
+safety = "review"
+impact = "Flutter downloads engine artifacts again"
+roots = ["~/Library/Caches/flutter_engine", "~/.cache/flutter"]
+min_age_days = 30
+
+[[rules]]
+id = "expo-device-cache"
+category = "tool-cache"
+safety = "safe"
+impact = "Expo downloads simulator apps and Android packages again"
+roots = ["~/.expo/ios-simulator-app-cache", "~/.expo/android-apk-cache"]
+
+[[rules]]
+id = "android-sdk-cache"
+category = "tool-cache"
+safety = "safe"
+impact = "Android tooling downloads or rebuilds cached artifacts again"
+roots = ["~/.android/cache", "~/.android/build-cache"]
+
+[[rules]]
+id = "android-studio-cache"
+category = "ide-cache"
+safety = "review"
+impact = "Android Studio rebuilds indexes and caches"
+roots = ["~/Library/Caches/Google/AndroidStudio*"]
+process_names = ["/Android Studio.app/"]
+min_age_days = 14
+
+[[rules]]
+id = "gradle-runtime-cache"
+category = "tool-cache"
+safety = "safe"
+description = "Gradle daemon registries, process logs, and worker runtime state. It is not project source or dependency storage."
+impact = "Gradle recreates daemon and worker state"
+recommendation = "Safe after Gradle and Android Studio are closed. Active daemons make this finding manual-only."
+roots = ["~/.gradle/daemon", "~/.gradle/workers"]
+process_names = ["GradleDaemon", "org.gradle.launcher.daemon"]
+min_age_days = 14
+
+[[rules]]
+id = "sbt-ivy-cache"
+category = "package-manager-cache"
+safety = "review"
+impact = "Scala and SBT dependencies are downloaded again"
+roots = ["~/.sbt/boot", "~/.sbt/zinc", "~/.ivy2/cache"]
+min_age_days = 30
+
+[[rules]]
+id = "zig-global-cache"
+category = "compiler-cache"
+safety = "safe"
+impact = "Zig recompiles cached objects"
+roots = ["~/.cache/zig"]
+
+[[rules]]
+id = "mise-cache"
+category = "toolchain-cache"
+safety = "safe"
+impact = "mise downloads plugin and tool metadata again"
+roots = ["~/.cache/mise", "~/Library/Caches/mise"]
+
+[[rules]]
+id = "puppeteer-browsers"
+category = "browser-binaries"
+safety = "review"
+impact = "Puppeteer downloads browser binaries again"
+roots = ["~/.cache/puppeteer"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "playwright-browsers"
+category = "browser-binaries"
+safety = "review"
+description = "Browser builds downloaded by Playwright for automated testing."
+impact = "Playwright downloads browser binaries again"
+recommendation = "Delete only if you accept a large redownload on the next Playwright run."
+roots = ["~/Library/Caches/ms-playwright*"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "huggingface-cache"
+category = "ai-ml-cache"
+safety = "review"
+description = "Downloaded Hugging Face models, datasets, and snapshots. Files may be large and shared across projects."
+impact = "models and datasets are downloaded again; local modifications inside the cache are lost"
+recommendation = "Review model names and ensure anything important is available remotely before deleting."
+roots = ["~/.cache/huggingface"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "torch-cache"
+category = "ai-ml-cache"
+safety = "review"
+impact = "PyTorch extensions, checkpoints, and downloaded assets may be rebuilt or downloaded again"
+roots = ["~/.cache/torch"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "tensorflow-cache"
+category = "ai-ml-cache"
+safety = "review"
+impact = "TensorFlow datasets and downloaded assets may be fetched again"
+roots = ["~/.cache/tensorflow"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "wandb-cache"
+category = "ai-ml-cache"
+safety = "risky"
+impact = "may contain offline experiment artifacts that have not been uploaded"
+roots = ["~/.cache/wandb"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "ollama-models"
+category = "ai-models"
+safety = "risky"
+description = "Locally installed Ollama model layers. These are installed assets, not transient runtime cache."
+impact = "local Ollama models are removed and must be downloaded again"
+recommendation = "Prefer `ollama rm <model>` so Ollama updates its model inventory."
+roots = ["~/.ollama/models"]
+manual_only = true
+process_names = ["/Ollama.app/", "ollama serve"]
+
+[[rules]]
+id = "cypress-browsers"
+category = "browser-binaries"
+safety = "review"
+description = "Cypress application and browser binaries downloaded for end-to-end testing."
+impact = "Cypress downloads the required binary again on the next test run."
+recommendation = "Review installed Cypress versions and keep versions still used by active projects."
+roots = ["~/Library/Caches/Cypress", "~/.cache/Cypress"]
+clean_via = ["cypress", "cache", "clear"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "aws-cli-cache"
+category = "tool-cache"
+safety = "review"
+description = "AWS CLI response, role, and SSO token caches."
+impact = "AWS commands may need to reauthenticate and refetch metadata."
+recommendation = "Avoid cleaning active SSO sessions; review token-bearing paths individually."
+roots = ["~/.aws/cli/cache", "~/.aws/sso/cache", "~/.aws/boto/cache", "~/.aws-sam/cache"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "gcloud-cache"
+category = "tool-cache"
+safety = "safe"
+description = "Google Cloud CLI logs, command caches, and unused component downloads."
+impact = "gcloud rebuilds caches and may redownload component data."
+recommendation = "Safe after gcloud commands finish; prefer the CLI's own component cleanup."
+roots = ["~/.config/gcloud/logs", "~/.config/gcloud/cache"]
+clean_via = ["gcloud", "components", "cleanup", "--unused"]
+process_names = ["gcloud "]
+min_age_days = 14
+
+[[rules]]
+id = "azure-cli-cache"
+category = "tool-cache"
+safety = "review"
+description = "Azure CLI command logs, cached responses, and extension downloads."
+impact = "Azure commands may refetch data; deleting extensions removes installed CLI functionality."
+recommendation = "Clean logs and response caches freely, but review extension storage."
+roots = ["~/.azure/logs", "~/.azure/commands", "~/.azure/cliextensions"]
+clean_via = ["az", "cache", "purge"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "kubernetes-cli-cache"
+category = "tool-cache"
+safety = "safe"
+description = "kubectl discovery and HTTP response caches plus Helm repository caches."
+impact = "Cluster API discovery and chart indexes are downloaded again."
+recommendation = "Safe when kubectl and Helm operations are idle."
+roots = [
+  "~/.kube/cache",
+  "~/.kube/http-cache",
+  "~/.cache/helm",
+  "~/Library/Caches/helm",
+]
+process_names = ["kubectl ", "helm "]
+min_age_days = 14
+
+[[rules]]
+id = "pulumi-plugin-cache"
+category = "toolchain-cache"
+safety = "review"
+description = "Downloaded Pulumi provider and language plugins."
+impact = "Pulumi downloads required plugins again before previews or updates."
+recommendation = "Review plugin versions against active stacks before removal."
+roots = ["~/.pulumi/plugins"]
+clean_via = ["pulumi", "plugin", "rm", "--all"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "unity-global-cache"
+category = "tool-cache"
+safety = "review"
+description = "Unity Asset Store downloads, package metadata, and accelerator caches."
+impact = "Unity redownloads packages and imported assets."
+recommendation = "Close Unity and retain caches needed by offline projects."
+roots = [
+  "~/Library/Unity/cache",
+  "~/Library/Unity/Asset Store-5.x",
+  "~/Library/Caches/com.unity3d.UnityEditor",
+]
+process_names = ["/Unity.app/", "Unity Hub"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "unreal-global-cache"
+category = "tool-cache"
+safety = "review"
+description = "Unreal Engine shared derived-data and launcher caches."
+impact = "Shaders and imported assets are rebuilt; launcher content may be downloaded again."
+recommendation = "Close Unreal Editor and review large shared caches before removal."
+roots = [
+  "~/Library/Application Support/Epic/UnrealEngine/Common/DerivedDataCache",
+  "~/Library/Caches/com.epicgames.EpicGamesLauncher",
+]
+process_names = ["/UnrealEditor", "/Epic Games Launcher.app/"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "lm-studio-models"
+category = "ai-models"
+safety = "risky"
+description = "Models installed for LM Studio. These are installed assets rather than disposable runtime cache."
+impact = "Removed models must be downloaded again before local inference."
+recommendation = "Review model names and remove through LM Studio where possible."
+roots = [
+  "~/.lmstudio/models",
+  "~/Library/Application Support/LM Studio/models",
+  "~/.cache/lm-studio/models",
+]
+manual_only = true
+process_names = ["/LM Studio.app/"]
+
+[[rules]]
+id = "gpt4all-models"
+category = "ai-models"
+safety = "risky"
+description = "Locally installed GPT4All model files."
+impact = "Removed models must be downloaded again."
+recommendation = "Review and remove models through GPT4All where possible."
+roots = ["~/Library/Application Support/nomic.ai/GPT4All", "~/.cache/gpt4all"]
+manual_only = true
+process_names = ["/GPT4All.app/"]
+
+[[rules]]
+id = "keras-model-cache"
+category = "ai-ml-cache"
+safety = "review"
+description = "Downloaded Keras models and datasets."
+impact = "Keras downloads model weights and datasets again."
+recommendation = "Review model names and remote availability before removal."
+roots = ["~/.keras/models", "~/.keras/datasets"]
+manual_only = true
+min_age_days = 30
+
+[[rules]]
+id = "jupyter-runtime-cache"
+category = "tool-cache"
+safety = "review"
+description = "Jupyter runtime connection files, kernelspec caches, and transient application state."
+impact = "Running notebook connections can break and cached metadata is rebuilt."
+recommendation = "Clean only after all Jupyter servers and kernels have stopped."
+roots = ["~/.cache/jupyter", "~/.local/share/jupyter/runtime"]
+process_names = ["jupyter-", "ipykernel"]
+manual_only = true
+min_age_days = 14

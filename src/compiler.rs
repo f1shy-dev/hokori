@@ -11,9 +11,11 @@ use crate::rules::{RuleDef, Safety, parse_size};
 pub struct CompiledRule {
     pub def: RuleDef,
     pub sibling_any: Option<GlobSet>,
+    pub process_names_lower: Vec<String>,
     /// Bits in the ancestor mask that disqualify this rule.
     pub exclude_mask: u64,
     pub min_size_bytes: u64,
+    pub min_file_size_bytes: u64,
     pub min_age_secs: i64,
 }
 
@@ -117,13 +119,24 @@ impl Engine {
                 Some(s) => parse_size(s)?,
                 None => 0,
             };
+            let min_file_size_bytes = match &def.min_file_size {
+                Some(s) => parse_size(s)?,
+                None => 0,
+            };
             let min_age_secs = def.min_age_days.unwrap_or(0) as i64 * 86_400;
+            let process_names_lower = def
+                .process_names
+                .iter()
+                .map(|name| name.to_lowercase())
+                .collect();
 
             rules.push(CompiledRule {
                 def,
                 sibling_any,
+                process_names_lower,
                 exclude_mask,
                 min_size_bytes,
+                min_file_size_bytes,
                 min_age_secs,
             });
         }
