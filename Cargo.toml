@@ -2,9 +2,12 @@
 name = "hokori"
 version = "0.2.0"
 edition = "2024"
-publish = false
 description = "A cautious, TUI-first macOS disk cleaner"
 readme = "README.md"
+license = "MIT"
+repository = "https://github.com/f1shy-dev/hokori"
+keywords = ["macos", "cleanup", "disk", "tui", "developer-tools"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 anyhow = "1.0"

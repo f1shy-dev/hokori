@@ -1,0 +1,124 @@
+name: Publish crate
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact Cargo.toml version to publish
+        required: true
+        type: string
+      confirmation:
+        description: Type "publish hokori VERSION"
+        required: true
+        type: string
+
+concurrency:
+  group: crates-io-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    name: Bootstrap first release
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'f1shy-dev/hokori'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    environment: crates-io
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install stable Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+
+      - name: Verify bootstrap request
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          manifest_version="$(cargo metadata --locked --no-deps --format-version 1 |
+            jq -r '.packages[] | select(.name == "hokori") | .version')"
+          test "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH"
+          test "$REQUESTED_VERSION" = "$manifest_version"
+          test "$CONFIRMATION" = "publish hokori $manifest_version"
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Lint
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --locked --all-targets
+
+      - name: Verify crates.io package
+        run: cargo publish --dry-run --locked
+
+      - name: Publish first release
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${CARGO_REGISTRY_TOKEN:-}"
+          cargo publish --locked
+
+  publish:
+    name: Publish trusted release
+    if: github.event_name == 'release' && github.repository == 'f1shy-dev/hokori'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install stable Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+
+      - name: Verify release tag
+        run: |
+          set -euo pipefail
+          manifest_version="$(cargo metadata --locked --no-deps --format-version 1 |
+            jq -r '.packages[] | select(.name == "hokori") | .version')"
+          test "$GITHUB_REF_TYPE" = "tag"
+          test "$GITHUB_REF_NAME" = "v$manifest_version"
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Lint
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --locked --all-targets
+
+      - name: Verify crates.io package
+        run: cargo publish --dry-run --locked
+
+      - name: Authenticate with crates.io
+        id: auth
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish --locked
