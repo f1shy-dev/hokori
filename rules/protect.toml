@@ -1,0 +1,80 @@
+# Protect rules: carved out of BOTH engines and re-checked in the deletion
+# funnel. safety = "protected" routes roots/path_globs into the protect globset.
+
+[[rules]]
+id = "protect-user-data"
+category = "protect"
+safety = "protected"
+roots = [
+  "~/Documents",
+  "~/Desktop",
+  "~/Pictures",
+  "~/Movies",
+  "~/Music",
+  "~/Library/Mobile Documents",
+  "~/Library/CloudStorage",
+  "~/Library/Photos",
+]
+
+[[rules]]
+id = "protect-credentials"
+category = "protect"
+safety = "protected"
+roots = ["~/Library/Keychains", "~/.ssh", "~/.aws", "~/.gnupg", "~/.kube"]
+path_globs = [
+  "**/.env",
+  "**/.env.*",
+  "**/.envrc",
+  "**/.npmrc",
+  "**/.netrc",
+  "**/.pypirc",
+  "**/credentials",
+  "**/credentials.json",
+]
+
+[[rules]]
+id = "protect-app-essentials"
+category = "protect"
+safety = "protected"
+roots = [
+  "~/Library/Preferences",
+  "~/Library/Accounts",
+  "~/Library/Cookies",
+]
+
+# System Settings / Control Center caches: deleting them blanks settings panels
+# on Sonoma/Sequoia (mole ships the same protection).
+[[rules]]
+id = "protect-system-settings-caches"
+category = "protect"
+safety = "protected"
+roots = [
+  "~/Library/Caches/com.apple.systempreferences*",
+  "~/Library/Caches/com.apple.controlcenter*",
+  "~/Library/Caches/com.apple.preferencepanes*",
+]
+
+# Expensive-to-recreate caches that look like junk (mole's default whitelist).
+[[rules]]
+id = "protect-expensive-caches"
+category = "protect"
+safety = "protected"
+roots = [
+  "~/Library/Caches/ms-playwright",
+  "~/.cache/huggingface",
+  "~/.ollama/models",
+]
+
+# VM / container disk images masquerading as app data.
+[[rules]]
+id = "protect-vm-data"
+category = "protect"
+safety = "protected"
+roots = [
+  "~/OrbStack",
+  "~/.orbstack",
+  "~/Library/Containers/com.docker.docker/Data/vms",
+  "~/Virtual Machines.localized",
+  "~/VirtualBox VMs",
+  "~/.utm",
+]

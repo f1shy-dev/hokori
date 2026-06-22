@@ -1,0 +1,216 @@
+# Targeted rules: anchored, enumerable locations. The engine expands globs by
+# listing directory levels and sizes each match directly — nothing else is
+# walked. One finding per expanded path (so ~/Library/Caches/* reports per app).
+
+[[rules]]
+id = "user-app-caches"
+category = "app-cache"
+safety = "safe"
+impact = "apps rebuild their caches on next launch"
+roots = ["~/Library/Caches/*"]
+min_size = "1MB"
+
+[[rules]]
+id = "homebrew-cache"
+category = "package-manager-cache"
+safety = "safe"
+impact = "downloads are re-fetched on next brew install"
+roots = ["~/Library/Caches/Homebrew"]
+clean_via = ["brew", "cleanup", "-s", "--prune=all"]
+
+[[rules]]
+id = "user-logs"
+category = "logs"
+safety = "safe"
+impact = "old diagnostic logs; only needed when debugging an app"
+roots = ["~/Library/Logs/*"]
+min_size = "512KB"
+
+[[rules]]
+id = "crash-reports"
+category = "logs"
+safety = "safe"
+impact = "old crash dumps; only useful for bug reports"
+roots = ["~/Library/Application Support/CrashReporter"]
+
+[[rules]]
+id = "http-storages"
+category = "app-cache"
+safety = "review"
+impact = "per-app HTTP state (HSTS, cookies-adjacent); some apps re-prompt"
+roots = ["~/Library/HTTPStorages/*"]
+min_size = "1MB"
+
+[[rules]]
+id = "saved-app-state"
+category = "app-state"
+safety = "review"
+impact = "apps forget their reopened windows and unsaved-state restore"
+roots = ["~/Library/Saved Application State/*"]
+min_age_days = 30
+min_size = "1MB"
+
+[[rules]]
+id = "electron-caches"
+category = "browser-cache"
+safety = "safe"
+impact = "Electron apps rebuild these caches on next launch"
+roots = [
+  "~/Library/Application Support/*/Cache",
+  "~/Library/Application Support/*/Code Cache",
+  "~/Library/Application Support/*/GPUCache",
+  "~/Library/Application Support/*/DawnGraphiteCache",
+  "~/Library/Application Support/*/DawnWebGPUCache",
+  "~/Library/Application Support/*/Crashpad",
+  "~/Library/Application Support/*/component_crx_cache",
+]
+min_size = "1MB"
+
+[[rules]]
+id = "service-worker-caches"
+category = "browser-cache"
+safety = "review"
+impact = "offline data for web apps (PWAs lose offline state, not logins)"
+roots = ["~/Library/Application Support/*/Service Worker/CacheStorage"]
+min_size = "10MB"
+
+[[rules]]
+id = "xcode-derived-data"
+category = "dev-cache"
+safety = "safe"
+impact = "Xcode rebuilds indexes and intermediates on next build (can be slow)"
+roots = ["~/Library/Developer/Xcode/DerivedData/*"]
+min_age_days = 7
+
+[[rules]]
+id = "xcode-archives"
+category = "dev-cache"
+safety = "review"
+impact = "you lose dSYMs needed to symbolicate shipped builds"
+roots = ["~/Library/Developer/Xcode/Archives/*"]
+min_age_days = 60
+
+[[rules]]
+id = "xcode-device-support"
+category = "dev-cache"
+safety = "review"
+impact = "re-created when you next attach that iOS version (slow first connect)"
+roots = ["~/Library/Developer/Xcode/iOS DeviceSupport/*"]
+min_age_days = 30
+
+[[rules]]
+id = "coresimulator-caches"
+category = "dev-cache"
+safety = "safe"
+impact = "simulator caches are rebuilt on demand"
+roots = [
+  "~/Library/Developer/CoreSimulator/Caches",
+  "~/Library/Developer/CoreSimulator/Devices/*/data/Library/Caches",
+  "~/Library/Developer/CoreSimulator/Devices/*/data/tmp",
+]
+
+[[rules]]
+id = "swiftpm-cache"
+category = "package-manager-cache"
+safety = "safe"
+impact = "packages are re-fetched on next resolve"
+roots = ["~/Library/org.swift.swiftpm", "~/.swiftpm"]
+
+[[rules]]
+id = "npm-cache"
+category = "package-manager-cache"
+safety = "safe"
+impact = "packages are re-downloaded on next install"
+roots = ["~/.npm/_cacache"]
+clean_via = ["npm", "cache", "clean", "--force"]
+
+[[rules]]
+id = "yarn-cache"
+category = "package-manager-cache"
+safety = "safe"
+impact = "packages are re-downloaded on next install"
+roots = ["~/.yarn/cache"]
+clean_via = ["yarn", "cache", "clean"]
+
+[[rules]]
+id = "bun-cache"
+category = "package-manager-cache"
+safety = "safe"
+impact = "packages are re-downloaded on next install"
+roots = ["~/.bun/install/cache"]
+
+[[rules]]
+id = "pnpm-store"
+category = "package-manager-cache"
+safety = "review"
+impact = "shared store: all pnpm projects re-download missing packages"
+roots = ["~/Library/pnpm/store", "~/.pnpm-store"]
+clean_via = ["pnpm", "store", "prune"]
+
+[[rules]]
+id = "cargo-registry"
+category = "package-manager-cache"
+safety = "safe"
+impact = "crates are re-downloaded / re-extracted on next build"
+roots = ["~/.cargo/registry/cache", "~/.cargo/registry/src"]
+
+[[rules]]
+id = "gradle-caches"
+category = "package-manager-cache"
+safety = "review"
+impact = "large re-download; first Gradle build afterwards is much slower"
+roots = ["~/.gradle/caches"]
+min_age_days = 30
+
+[[rules]]
+id = "maven-repository"
+category = "package-manager-cache"
+safety = "review"
+impact = "large re-download; first Maven build afterwards is much slower"
+roots = ["~/.m2/repository"]
+min_age_days = 60
+
+[[rules]]
+id = "go-module-cache"
+category = "package-manager-cache"
+safety = "review"
+impact = "modules are re-downloaded on next build"
+roots = ["~/go/pkg/mod/cache"]
+clean_via = ["go", "clean", "-modcache"]
+min_age_days = 30
+
+[[rules]]
+id = "docker-advice"
+category = "virtualization"
+safety = "review"
+impact = "review with: docker system df / prune with: docker system prune"
+roots = ["~/Library/Containers/com.docker.docker/Data/vms"]
+report_only = true
+
+[[rules]]
+id = "trash-bin"
+category = "trash"
+safety = "review"
+impact = "your Trash; empty it from Finder or with --rule trash-bin"
+roots = ["~/.Trash"]
+report_only = true
+
+[[rules]]
+id = "ios-device-backups"
+category = "backups"
+safety = "risky"
+impact = "local iPhone/iPad backups; delete only if backed up elsewhere"
+roots = ["~/Library/Application Support/MobileSync/Backup/*"]
+report_only = true
+
+[[rules]]
+id = "downloads-installers"
+category = "installers"
+safety = "review"
+impact = "old installer images in Downloads; re-downloadable"
+path_globs = [
+  "~/Downloads/*.dmg",
+  "~/Downloads/*.pkg",
+  "~/Downloads/*.iso",
+]
+min_age_days = 30
